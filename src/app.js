@@ -1,5 +1,6 @@
 import { STUDY_CONFIG } from "./config/studyConfig.js";
 import { loadState, saveState } from "./core/storage.js";
+import { LUCIDE_ICONS } from "./core/icons.js";
 import { renderTodayPage } from "./pages/todayPage.js";
 import { renderVocabPage } from "./pages/vocabPage.js";
 import { renderGrammarPage } from "./pages/grammarPage.js";
@@ -63,7 +64,30 @@ function renderCurrentRoute() {
   });
 }
 
+function initThemeToggle() {
+  const btn = document.getElementById("theme-toggle-btn");
+  if (!btn) return;
+  const saved = window.localStorage?.getItem("nihongo_step_theme");
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const initialTheme = saved || (prefersDark ? "dark" : "light");
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    btn.innerHTML = theme === "dark" ? LUCIDE_ICONS.sun : LUCIDE_ICONS.moon;
+    btn.setAttribute("aria-label", theme === "dark" ? "切換為淺色模式" : "切換為深色模式");
+  }
+
+  applyTheme(initialTheme);
+  btn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    const next = current === "dark" ? "light" : "dark";
+    window.localStorage?.setItem("nihongo_step_theme", next);
+    applyTheme(next);
+  });
+}
+
 function init() {
+  initThemeToggle();
   const footer = document.getElementById("footer-disclaimer");
   if (footer) {
     footer.textContent = `${STUDY_CONFIG.appName}｜${STUDY_CONFIG.disclaimer.contentNotice}`;

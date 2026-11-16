@@ -9,6 +9,7 @@ import {
 } from "../core/storage.js";
 import { getLocalDateString } from "../core/studyLogic.js";
 import { escapeHtml } from "../core/dom.js";
+import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderRecordsPage(container, { state, updateState }) {
   const ui = {
@@ -30,17 +31,20 @@ export function renderRecordsPage(container, { state, updateState }) {
     const wrongCount = Object.keys(state.wrongBook || {}).length;
 
     container.innerHTML = `
-      <h2 class="page-title">學習紀錄與設定</h2>
-      <p class="page-desc">管理本機瀏覽器學習進度、匯出 JSON 備份或從備份還原。</p>
+      <div class="page-header">
+        <h2 class="page-title">學習紀錄與設定</h2>
+        <p class="page-desc">管理本機瀏覽器學習進度、匯出 JSON 備份或從備份還原。</p>
+      </div>
 
-      <section class="card">
-        <div class="notice-box notice-warning">
+      <section class="notice-box notice-warning">
+        ${LUCIDE_ICONS.alertTriangle}
+        <div class="notice-content">
           <strong>本機資料保存提醒：</strong>${escapeHtml(STUDY_CONFIG.disclaimer.storageNotice)}
         </div>
       </section>
 
-      <section class="card">
-        <h3 style="margin-top: 0;">目前學習統計</h3>
+      <section class="card" style="margin-top: 16px;">
+        <h3 class="section-heading">目前學習統計</h3>
         <div class="grid-2">
           <div class="example-box">
             <div><strong>單字已評估：</strong>${vocabAssessed} / ${VOCAB_LIST.length} 個</div>
@@ -54,21 +58,26 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
-        <h3 style="margin-top: 0;">JSON 匯出與匯入</h3>
+        <h3 class="section-heading">JSON 匯出與匯入</h3>
         <p class="page-desc">匯入時會先檢查 JSON 格式與版本（目前支援 v${STUDY_CONFIG.schemaVersion}），驗證通過並經您確認後才會寫入；若檔案損壞，原紀錄不會受到影響。</p>
 
         <div class="btn-row">
           <button class="btn btn-primary" type="button" id="export-json-btn">匯出 JSON 備份</button>
         </div>
 
-        <div style="margin-top: 16px;">
+        <div class="card-divider">
           <label class="filter-label" for="import-json-input">選擇要匯入的 JSON 備份檔：</label><br />
-          <input type="file" id="import-json-input" accept=".json,application/json" style="margin-top: 6px;" />
+          <input type="file" id="import-json-input" accept=".json,application/json" style="margin-top: 8px;" />
         </div>
 
         ${
           ui.importError
-            ? `<div class="notice-box notice-danger" style="margin-top: 12px;"><strong>✕ 匯入失敗：</strong>${escapeHtml(ui.importError)}</div>`
+            ? `
+          <div class="notice-box notice-danger" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.x}
+            <div class="notice-content"><strong>匯入失敗：</strong>${escapeHtml(ui.importError)}</div>
+          </div>
+        `
             : ""
         }
 
@@ -76,12 +85,15 @@ export function renderRecordsPage(container, { state, updateState }) {
           ui.importPreview
             ? `
           <div class="notice-box notice-warning" style="margin-top: 12px;">
-            <strong>請確認是否覆蓋目前紀錄：</strong><br />
-            備份時間：${escapeHtml(ui.importPreview.summary.exportedAt)}<br />
-            單字紀錄：${ui.importPreview.summary.vocabCount} 筆｜已讀文法：${ui.importPreview.summary.grammarReadCount} 篇｜累計作答：${ui.importPreview.summary.totalAnswered} 題｜錯題紀錄：${ui.importPreview.summary.wrongBookCount} 題
-            <div class="btn-row">
-              <button class="btn btn-primary" type="button" id="confirm-import-btn">確認匯入並覆蓋</button>
-              <button class="btn" type="button" id="cancel-import-btn">取消</button>
+            ${LUCIDE_ICONS.alertTriangle}
+            <div class="notice-content">
+              <strong>請確認是否覆蓋目前紀錄：</strong><br />
+              備份時間：${escapeHtml(ui.importPreview.summary.exportedAt)}<br />
+              單字紀錄：${ui.importPreview.summary.vocabCount} 筆｜已讀文法：${ui.importPreview.summary.grammarReadCount} 篇｜累計作答：${ui.importPreview.summary.totalAnswered} 題｜錯題紀錄：${ui.importPreview.summary.wrongBookCount} 題
+              <div class="btn-row">
+                <button class="btn btn-primary" type="button" id="confirm-import-btn">確認匯入並覆蓋</button>
+                <button class="btn" type="button" id="cancel-import-btn">取消</button>
+              </div>
             </div>
           </div>
         `
@@ -90,24 +102,32 @@ export function renderRecordsPage(container, { state, updateState }) {
 
         ${
           ui.statusMessage
-            ? `<div class="notice-box notice-success" style="margin-top: 12px;"><strong>✓ ${escapeHtml(ui.statusMessage)}</strong></div>`
+            ? `
+          <div class="notice-box notice-success" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.check}
+            <div class="notice-content"><strong>${escapeHtml(ui.statusMessage)}</strong></div>
+          </div>
+        `
             : ""
         }
       </section>
 
       <section class="card">
-        <h3 style="margin-top: 0; color: var(--danger);">重設學習紀錄</h3>
+        <h3 class="section-heading" style="color: var(--danger);">重設學習紀錄</h3>
         <p class="page-desc">將清除目前瀏覽器內所有的單字進度、文法閱讀狀態、練習統計與錯題本。</p>
 
         ${
           !ui.confirmReset
-            ? `<button class="btn btn-danger" type="button" id="ask-reset-btn">重設所有學習紀錄</button>`
+            ? `<div class="btn-row"><button class="btn btn-danger" type="button" id="ask-reset-btn">重設所有學習紀錄</button></div>`
             : `
-          <div class="notice-box notice-danger">
-            <strong>⚠ 確定要清空所有學習紀錄嗎？此動作無法復原。</strong>
-            <div class="btn-row">
-              <button class="btn btn-danger" type="button" id="confirm-reset-btn">確定重設</button>
-              <button class="btn" type="button" id="cancel-reset-btn">取消</button>
+          <div class="notice-box notice-danger" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.alertTriangle}
+            <div class="notice-content">
+              <strong>確定要清空所有學習紀錄嗎？此動作無法復原。</strong>
+              <div class="btn-row">
+                <button class="btn btn-danger" type="button" id="confirm-reset-btn">確定重設</button>
+                <button class="btn" type="button" id="cancel-reset-btn">取消</button>
+              </div>
             </div>
           </div>
         `

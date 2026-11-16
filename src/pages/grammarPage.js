@@ -3,6 +3,7 @@ import { GRAMMAR_LIST } from "../data/grammar.js";
 import { toggleGrammarRead, setGrammarMastery } from "../core/studyLogic.js";
 import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
+import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderGrammarPage(container, { state, updateState }) {
   const ui = {
@@ -31,8 +32,10 @@ export function renderGrammarPage(container, { state, updateState }) {
     const readCount = GRAMMAR_LIST.filter((g) => state.grammarProgress[g.id]?.isRead).length;
 
     container.innerHTML = `
-      <h2 class="page-title">文法筆記</h2>
-      <p class="page-desc">已閱讀：<strong>${readCount} / ${GRAMMAR_LIST.length}</strong> 篇。「已閱讀」與「熟練度」分開記錄，方便區分讀過與真正掌握。</p>
+      <div class="page-header">
+        <h2 class="page-title">文法筆記</h2>
+        <p class="page-desc">已閱讀：<strong>${readCount} / ${GRAMMAR_LIST.length}</strong> 篇。「已閱讀」與「熟練度」分開記錄，方便區分讀過與真正掌握。</p>
+      </div>
 
       <div class="filter-bar">
         <div class="filter-group">
@@ -54,15 +57,14 @@ export function renderGrammarPage(container, { state, updateState }) {
         </div>
       </div>
 
-      ${
-        list.length === 0
-          ? `
+      ${list.length === 0
+        ? `
         <section class="card empty-state">
           <h3>沒有符合條件的文法筆記</h3>
           <p>請嘗試調整上方分類或閱讀狀態篩選。</p>
         </section>
       `
-          : list.map((g) => renderGrammarCard(g, state.grammarProgress[g.id])).join("")
+        : list.map((g) => renderGrammarCard(g, state.grammarProgress[g.id])).join("")
       }
     `;
 
@@ -79,13 +81,13 @@ export function renderGrammarPage(container, { state, updateState }) {
         <div class="badge-row">
           <span class="badge badge-primary">${escapeHtml(item.levelCategory)} 分類</span>
           <span class="badge ${isRead ? "badge-success" : "badge-warning"}">
-            ${isRead ? "✓ 已閱讀" : "未閱讀"}
+            ${isRead ? `${LUCIDE_ICONS.check}<span>已閱讀</span>` : "未閱讀"}
           </span>
           <span class="badge">熟練度：${escapeHtml(STUDY_CONFIG.grammarMasteryLabels[mastery])}</span>
           <span class="badge">${escapeHtml(item.reviewStatus)}</span>
         </div>
 
-        <h3 style="margin: 10px 0 8px; font-size: 1.3rem;" lang="ja">${escapeHtml(item.title)}</h3>
+        <h3 class="card-title" style="margin-top: 12px;" lang="ja">${escapeHtml(item.title)}</h3>
         <p><strong>意思：</strong>${escapeHtml(item.meaning)}</p>
         <p><strong>接續：</strong>${escapeHtml(item.connection)}</p>
         <p><strong>使用情境：</strong>${escapeHtml(item.situation)}</p>
@@ -93,40 +95,41 @@ export function renderGrammarPage(container, { state, updateState }) {
         <div class="example-box">
           <strong>例句：</strong>
           ${item.examples
-            .map(
-              (ex) => `
-            <div style="margin-top: 8px;">
+        .map(
+          (ex) => `
+            <div class="example-item">
               <div lang="ja">${escapeHtml(ex.ja)}</div>
-              <div style="color: var(--text-muted); font-size: 0.92rem;">${escapeHtml(ex.zh)}</div>
-              <div class="btn-row" style="margin-top: 6px;">
+              <div class="example-zh">${escapeHtml(ex.zh)}</div>
+              <div class="btn-row">
                 <button
                   class="btn"
                   type="button"
                   data-speak-ja="${escapeHtml(ex.ja)}"
                   ${speechAvailable ? "" : "disabled"}
                 >
-                  🔊 朗讀例句
+                  ${LUCIDE_ICONS.volume2}
+                  <span>朗讀例句</span>
                 </button>
               </div>
             </div>
           `
-            )
-            .join("")}
+        )
+        .join("")}
         </div>
 
-        <p style="margin-top: 10px;"><strong>注意事項：</strong>${escapeHtml(item.notes)}</p>
+        <p class="flashcard-meta"><strong>注意事項：</strong>${escapeHtml(item.notes)}</p>
 
-        <div class="btn-row" style="border-top: 1px solid var(--border); padding-top: 12px;">
+        <div class="btn-row card-divider">
           <button class="btn ${isRead ? "btn-success" : "btn-primary"}" type="button" data-toggle-read="${escapeHtml(item.id)}">
-            ${isRead ? "✓ 已標記已閱讀（點擊取消）" : "標記為已閱讀"}
+            ${isRead ? `${LUCIDE_ICONS.check}<span>已標記已閱讀（點擊取消）</span>` : "標記為已閱讀"}
           </button>
         </div>
 
-        <div class="btn-row" style="margin-top: 10px; align-items: center;">
+        <div class="btn-row">
           <span class="filter-label">熟練度（獨立於已閱讀）：</span>
           ${["unrated", "unfamiliar", "somewhat", "familiar"]
-            .map(
-              (key) => `
+        .map(
+          (key) => `
             <button
               class="btn ${mastery === key ? "btn-active" : ""}"
               type="button"
@@ -136,8 +139,8 @@ export function renderGrammarPage(container, { state, updateState }) {
               ${escapeHtml(STUDY_CONFIG.grammarMasteryLabels[key])}
             </button>
           `
-            )
-            .join("")}
+        )
+        .join("")}
         </div>
       </article>
     `;

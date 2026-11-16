@@ -8,6 +8,7 @@ import {
 } from "../core/studyLogic.js";
 import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
+import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderVocabPage(container, { state, updateState }) {
   const ui = {
@@ -54,8 +55,10 @@ export function renderVocabPage(container, { state, updateState }) {
     const dueTotal = VOCAB_LIST.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
 
     container.innerHTML = `
-      <h2 class="page-title">單字卡</h2>
-      <p class="page-desc">先看題面回想讀音與意思，點擊「顯示答案」後再自行評估熟悉度（單純翻面不會自動計為已熟悉）。目前待複習總數：<strong>${dueTotal}</strong> 個。</p>
+      <div class="page-header">
+        <h2 class="page-title">單字卡</h2>
+        <p class="page-desc">先看題面回想讀音與意思，點擊「顯示答案」後再自行評估熟悉度（單純翻面不會自動計為已熟悉）。目前待複習總數：<strong>${dueTotal}</strong> 個。</p>
+      </div>
 
       <div class="filter-bar">
         <div class="filter-group">
@@ -92,7 +95,7 @@ export function renderVocabPage(container, { state, updateState }) {
           </select>
         </div>
 
-        <label class="filter-group" style="cursor: pointer;">
+        <label class="checkbox-inline">
           <input type="checkbox" id="vocab-katakana-toggle" ${ui.showKatakana ? "checked" : ""} />
           <span class="filter-label">顯示片假名</span>
         </label>
@@ -102,8 +105,8 @@ export function renderVocabPage(container, { state, updateState }) {
         !current
           ? `
         <section class="card empty-state">
-          <h3>目前沒有符合條件的單字卡</h3>
-          <p>${ui.statusFilter === "due" ? "太棒了！目前沒有待複習的單字。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
+          <h3 class="card-title">目前沒有符合條件的單字卡</h3>
+          <p class="page-desc">${ui.statusFilter === "due" ? "太棒了！目前沒有待複習的單字。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
           <div class="btn-row" style="justify-content: center;">
             <button class="btn btn-primary" type="button" id="vocab-show-all-btn">查看全部單字</button>
           </div>
@@ -133,30 +136,31 @@ export function renderVocabPage(container, { state, updateState }) {
           <span class="badge">第 ${ui.index + 1} / ${total} 張</span>
         </div>
 
-        <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;">
+        <div class="flashcard-header">
           <div class="flashcard-word" lang="ja">${escapeHtml(item.word)}</div>
           ${
             ui.showKatakana
-              ? `<span class="badge badge-primary" lang="ja" style="font-size: 1rem; padding: 6px 14px;">${escapeHtml(katakanaReading)}</span>`
+              ? `<span class="flashcard-katakana-inline" lang="ja">${escapeHtml(katakanaReading)}</span>`
               : ""
           }
         </div>
-        <div class="btn-row" style="margin-top: 8px; margin-bottom: 10px;">
+        <div class="btn-row">
           <button
             class="btn"
             type="button"
             data-speak-ja="${escapeHtml(item.kana)}"
             ${speechAvailable ? "" : "disabled"}
           >
-            🔊 朗讀單字
+            ${LUCIDE_ICONS.volume2}
+            <span>朗讀單字</span>
           </button>
           ${
             speechAvailable
               ? ""
-              : `<span class="page-desc" style="margin: 0; align-self: center;">（目前瀏覽器不支援語音朗讀）</span>`
+              : `<span class="page-desc">（目前瀏覽器不支援語音朗讀）</span>`
           }
         </div>
-        <p class="page-desc" style="margin-bottom: 10px;">
+        <p class="flashcard-meta">
           目前熟悉度：<strong>${escapeHtml(famLabel)}</strong>｜下次複習日：<strong>${escapeHtml(nextDateText)}</strong>
         </p>
 
@@ -172,25 +176,26 @@ export function renderVocabPage(container, { state, updateState }) {
             <div class="flashcard-kana" lang="ja">
               ${escapeHtml(item.kana)}${ui.showKatakana ? `（${escapeHtml(katakanaReading)}）` : ""}
             </div>
-            <p><strong>中文意思：</strong>${escapeHtml(item.meaning)}</p>
-            <p><strong>詞性：</strong>${escapeHtml(item.pos)}</p>
+            <p class="flashcard-meaning">${escapeHtml(item.meaning)}</p>
+            <p class="flashcard-meta">詞性：${escapeHtml(item.pos)}</p>
             <div class="example-box">
               <div lang="ja"><strong>例句：</strong>${escapeHtml(item.exampleJa)}</div>
-              <div><strong>翻譯：</strong>${escapeHtml(item.exampleZh)}</div>
-              <div class="btn-row" style="margin-top: 8px;">
+              <div class="example-zh">翻譯：${escapeHtml(item.exampleZh)}</div>
+              <div class="btn-row">
                 <button
                   class="btn"
                   type="button"
                   data-speak-ja="${escapeHtml(item.exampleJa)}"
                   ${speechAvailable ? "" : "disabled"}
                 >
-                  🔊 朗讀例句
+                  ${LUCIDE_ICONS.volume2}
+                  <span>朗讀例句</span>
                 </button>
               </div>
             </div>
 
-            <p style="margin: 14px 0 6px; font-weight: 600;">請評估此單字熟悉度（更新下次複習日期）：</p>
-            <div class="btn-row" style="margin-top: 6px;">
+            <p class="flashcard-meta">請評估此單字熟悉度（更新下次複習日期）：</p>
+            <div class="btn-row">
               <button class="btn btn-danger" type="button" data-rate="unfamiliar">
                 不熟（${STUDY_CONFIG.reviewIntervalsDays.unfamiliar} 天後複習）
               </button>
@@ -205,7 +210,7 @@ export function renderVocabPage(container, { state, updateState }) {
         `
         }
 
-        <div class="btn-row" style="margin-top: 18px; border-top: 1px solid var(--border); padding-top: 12px;">
+        <div class="btn-row card-divider">
           <button class="btn" type="button" id="vocab-prev-btn" ${total <= 1 ? "disabled" : ""}>上一張</button>
           <button class="btn" type="button" id="vocab-next-btn" ${total <= 1 ? "disabled" : ""}>下一張</button>
         </div>

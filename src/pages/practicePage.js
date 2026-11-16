@@ -2,6 +2,7 @@ import { QUIZ_LIST } from "../data/quizzes.js";
 import { prepareQuizQuestion, recordQuizSubmission } from "../core/studyLogic.js";
 import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
+import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderPracticePage(container, { state, updateState, params = {} }) {
   const ui = {
@@ -50,8 +51,10 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     const wrongEntries = Object.values(state.wrongBook || {});
 
     container.innerHTML = `
-      <h2 class="page-title">練習與錯題本</h2>
-      <p class="page-desc">單選題練習支援選項隨機打亂，並依選項 ID 判分。答錯的題目會自動收入下方錯題本，同一題不會重複建立卡片。</p>
+      <div class="page-header">
+        <h2 class="page-title">練習與錯題本</h2>
+        <p class="page-desc">單選題練習支援選項隨機打亂，並依選項 ID 判分。答錯的題目會自動收入下方錯題本，同一題不會重複建立卡片。</p>
+      </div>
 
       <div class="filter-bar">
         <div class="btn-row" style="margin-top: 0;">
@@ -63,9 +66,9 @@ export function renderPracticePage(container, { state, updateState, params = {} 
           </button>
         </div>
 
-        <label class="filter-group" style="cursor: pointer;">
+        <label class="checkbox-inline">
           <input type="checkbox" id="shuffle-toggle" ${ui.shuffleOptions ? "checked" : ""} />
-          <span>打亂選項順序</span>
+          <span class="filter-label">打亂選項順序</span>
         </label>
       </div>
 
@@ -73,8 +76,8 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         !current
           ? `
         <section class="card empty-state">
-          <h3>目前沒有錯題可練習</h3>
-          <p>太棒了！錯題本目前是空的，您可以切換回「全部練習」繼續做題。</p>
+          <h3 class="card-title">目前沒有錯題可練習</h3>
+          <p class="page-desc">太棒了！錯題本目前是空的，您可以切換回「全部練習」繼續做題。</p>
           <div class="btn-row" style="justify-content: center;">
             <button class="btn btn-primary" type="button" id="empty-back-all-btn">切換為全部練習</button>
           </div>
@@ -83,11 +86,11 @@ export function renderPracticePage(container, { state, updateState, params = {} 
           : renderQuizCard(current, pool.length)
       }
 
-      <section class="card" style="margin-top: 18px;">
-        <h3 style="margin-top: 0;">錯題本紀錄（共 ${wrongEntries.length} 題）</h3>
+      <section class="card">
+        <h3 class="section-heading">錯題本紀錄（共 ${wrongEntries.length} 題）</h3>
         ${
           wrongEntries.length === 0
-            ? `<p class="page-desc" style="margin-bottom: 0;">目前沒有任何錯題紀錄。</p>`
+            ? `<p class="page-desc">目前沒有任何錯題紀錄。</p>`
             : renderWrongBookList(wrongEntries)
         }
       </section>
@@ -108,14 +111,15 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         </div>
 
         <div class="quiz-prompt" lang="ja">${escapeHtml(question.prompt)}</div>
-        <div class="btn-row" style="margin-top: 6px; margin-bottom: 10px;">
+        <div class="btn-row">
           <button
             class="btn"
             type="button"
             data-speak-ja="${escapeHtml(question.prompt)}"
             ${speechAvailable ? "" : "disabled"}
           >
-            🔊 朗讀題目
+            ${LUCIDE_ICONS.volume2}
+            <span>朗讀題目</span>
           </button>
         </div>
 
@@ -156,10 +160,13 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         ${
           ui.submitted && ui.lastResult
             ? `
-          <div class="notice-box ${ui.lastResult.isCorrect ? "notice-success" : "notice-danger"}" style="margin-top: 14px;">
-            <strong>${ui.lastResult.isCorrect ? "✓ 答對了！" : "✕ 答錯了"}</strong><br />
-            <span>正確答案：<strong lang="ja">${escapeHtml(ui.lastResult.correctOption?.text || "")}</strong></span><br />
-            <span>解析：${escapeHtml(question.explanation)}</span>
+          <div class="notice-box ${ui.lastResult.isCorrect ? "notice-success" : "notice-danger"}" style="margin-top: 16px;">
+            ${ui.lastResult.isCorrect ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
+            <div class="notice-content">
+              <strong>${ui.lastResult.isCorrect ? "答對了！" : "答錯了"}</strong><br />
+              <span>正確答案：<strong lang="ja">${escapeHtml(ui.lastResult.correctOption?.text || "")}</strong></span><br />
+              <span>解析：${escapeHtml(question.explanation)}</span>
+            </div>
           </div>
         `
             : ""
@@ -170,13 +177,13 @@ export function renderPracticePage(container, { state, updateState, params = {} 
 
   function renderWrongBookList(wrongEntries) {
     return `
-      <div style="display: grid; gap: 10px;">
+      <div class="stack">
         ${wrongEntries
           .map((entry) => {
             const q = QUIZ_LIST.find((item) => item.id === entry.questionId);
-            const statusText = entry.lastIsCorrect
-              ? "✓ 最近已重新答對（保留歷史紀錄）"
-              : "✕ 最近仍答錯（建議重練）";
+            const statusHtml = entry.lastIsCorrect
+              ? `${LUCIDE_ICONS.check}<span>最近已重新答對（保留歷史紀錄）</span>`
+              : `${LUCIDE_ICONS.x}<span>最近仍答錯（建議重練）</span>`;
             const statusClass = entry.lastIsCorrect ? "badge-success" : "badge-danger";
             const timeText = entry.lastAnsweredAt
               ? new Date(entry.lastAnsweredAt).toLocaleString("zh-TW", { hour12: false })
@@ -184,13 +191,13 @@ export function renderPracticePage(container, { state, updateState, params = {} 
 
             return `
               <div class="example-box">
-                <div class="badge-row" style="margin-bottom: 6px;">
+                <div class="badge-row">
                   <span class="badge">${escapeHtml(entry.questionId)}</span>
-                  <span class="badge ${statusClass}">${statusText}</span>
+                  <span class="badge ${statusClass}">${statusHtml}</span>
                   <span class="badge badge-warning">累計答錯 ${entry.wrongCount} 次</span>
                 </div>
-                <div lang="ja" style="font-weight: 600;">${escapeHtml(q?.prompt || "題目不存在")}</div>
-                <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">
+                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${escapeHtml(q?.prompt || "題目不存在")}</div>
+                <div class="flashcard-meta">
                   最近錯選：<span lang="ja">${escapeHtml(entry.lastWrongOptionText)}</span>｜最近作答：${escapeHtml(timeText)}
                 </div>
               </div>
