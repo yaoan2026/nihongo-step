@@ -5,7 +5,8 @@ import {
   hiraganaToKatakana,
   isVocabDue,
   rateVocabCard,
-  shuffleArray
+  shuffleArray,
+  toggleReviewMark
 } from "../core/studyLogic.js";
 import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
@@ -23,7 +24,8 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     choiceOptions: [],
     choiceKey: "",
     selectedChoiceId: null,
-    choiceSubmitted: false
+    choiceSubmitted: false,
+    pinnedCard: null
   };
 
   const groups = Array.from(new Set(VOCAB_LIST.map((v) => v.group)));
@@ -36,6 +38,9 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       }
       if (ui.groupFilter !== "all" && item.group !== ui.groupFilter) {
         return false;
+      }
+      if (ui.statusFilter === "marked") {
+        return Boolean(state.reviewMarks?.vocab?.[item.id]);
       }
       const prog = state.vocabProgress[item.id];
       if (ui.statusFilter === "due") {
@@ -74,8 +79,8 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     if (ui.index >= list.length) {
       ui.index = 0;
     }
-    const current = list[ui.index] || null;
-    if (ui.mode === "quiz") {
+    const current = ui.pinnedCard || list[ui.index] || null;
+    if (ui.mode === "quiz" && !ui.pinnedCard) {
       ensureChoiceOptions(current);
     }
 
@@ -122,11 +127,11 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           <select id="vocab-group-filter">
             <option value="all" ${ui.groupFilter === "all" ? "selected" : ""}>全部分組</option>
             ${groups
-              .map(
-                (g) =>
-                  `<option value="${escapeHtml(g)}" ${ui.groupFilter === g ? "selected" : ""}>${escapeHtml(g)}</option>`
-              )
-              .join("")}
+        .map(
+          (g) =>
+            `<option value="${escapeHtml(g)}" ${ui.groupFilter === g ? "selected" : ""}>${escapeHtml(g)}</option>`
+        )
+        .join("")}
           </select>
         </div>
 
@@ -134,6 +139,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           <label class="filter-label" for="vocab-status-filter">狀態</label>
           <select id="vocab-status-filter">
             <option value="due" ${ui.statusFilter === "due" ? "selected" : ""}>待複習</option>
+            <option value="marked" ${ui.statusFilter === "marked" ? "selected" : ""}>已標記複習</option>
             <option value="all" ${ui.statusFilter === "all" ? "selected" : ""}>全部單字</option>
             <option value="unlearned" ${ui.statusFilter === "unlearned" ? "selected" : ""}>未學習</option>
             <option value="unfamiliar" ${ui.statusFilter === "unfamiliar" ? "selected" : ""}>不熟</option>
@@ -148,9 +154,8 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
         </label>
       </div>
 
-      ${
-        !current
-          ? `
+      ${!current
+        ? `
         <section class="card empty-state">
           <h3 class="card-title">目前沒有符合條件的單字</h3>
           <p class="page-desc">${ui.statusFilter === "due" ? "太棒了！今日待複習的單字已全部完成。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
@@ -159,7 +164,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           </div>
         </section>
       `
-          : renderCard(current, state.vocabProgress[current.id], list.length)
+        : renderCard(current, state.vocabProgress[current.id], list.length)
       }
     `;
 
@@ -174,6 +179,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     const speechAvailable = isSpeechSupported();
     const katakanaReading = hiraganaToKatakana(item.kana);
     const isCorrectChoice = ui.selectedChoiceId === item.id;
+    const isMarked = Boolean(state.reviewMarks?.vocab?.[item.id]);
 
     return `
       <section class="card">
@@ -181,18 +187,18 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           <span class="badge badge-primary">${escapeHtml(item.levelCategory)} 分類</span>
           <span class="badge">${escapeHtml(item.group)}</span>
           <span class="badge">${escapeHtml(item.reviewStatus)}</span>
-          <span class="badge">第 ${ui.index + 1} / ${total} 張</span>
+          ${isMarked ? `<span class="badge badge-warning">★ 已標記待複習</span>` : ""}
+          <span class="badge">第 ${ui.index + 1} / ${total || 1} 張</span>
         </div>
 
         <div class="flashcard-header">
           <div class="flashcard-word" lang="ja">
             <ruby>${escapeHtml(item.word)}<rt>${escapeHtml(ui.showKatakana ? katakanaReading : item.kana)}</rt></ruby>
           </div>
-          ${
-            ui.showKatakana
-              ? `<span class="flashcard-katakana-inline" lang="ja">${escapeHtml(katakanaReading)}</span>`
-              : ""
-          }
+          ${ui.showKatakana
+        ? `<span class="flashcard-katakana-inline" lang="ja">${escapeHtml(katakanaReading)}</span>`
+        : ""
+      }
         </div>
 
         <div class="btn-row">
@@ -205,22 +211,29 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             ${LUCIDE_ICONS.volume2}
             <span>朗讀單字</span>
           </button>
+          <button
+            class="btn ${isMarked ? "btn-warning" : ""}"
+            type="button"
+            id="vocab-mark-review-btn"
+          >
+            ${LUCIDE_ICONS.star}
+            <span>${isMarked ? "已標記待複習（點擊取消）" : "標記為待複習"}</span>
+          </button>
         </div>
 
         <p class="flashcard-meta">
           目前熟悉度：<strong>${escapeHtml(famLabel)}</strong>｜下次複習日：<strong>${escapeHtml(nextDateText)}</strong>
         </p>
 
-        ${
-          ui.mode === "quiz"
-            ? `
+        ${ui.mode === "quiz"
+        ? `
           <div class="card-divider">
             <p class="filter-label" style="margin: 0 0 8px;">請選出正確的中文意思：</p>
             <div class="option-list" role="radiogroup" aria-label="單字中文選項">
               ${ui.choiceOptions
-                .map((opt, idx) => {
-                  const selected = ui.selectedChoiceId === opt.id;
-                  return `
+          .map((opt, idx) => {
+            const selected = ui.selectedChoiceId === opt.id;
+            return `
                     <label class="option-label ${selected ? "selected" : ""}">
                       <span class="option-key">${idx + 1}</span>
                       <input
@@ -233,8 +246,8 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
                       <span>${escapeHtml(opt.meaning)}</span>
                     </label>
                   `;
-                })
-                .join("")}
+          })
+          .join("")}
             </div>
 
             <div class="btn-row">
@@ -246,16 +259,14 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
               >
                 ${ui.choiceSubmitted ? "已完成評估" : "確認答案並完成此字"}
               </button>
-              ${
-                ui.choiceSubmitted
-                  ? `<button class="btn btn-blue" type="button" id="vocab-next-btn">繼續下一個</button>`
-                  : ""
-              }
+              ${ui.choiceSubmitted
+          ? `<button class="btn btn-blue" type="button" id="vocab-next-btn">繼續下一個</button>`
+          : ""
+        }
             </div>
 
-            ${
-              ui.choiceSubmitted
-                ? `
+            ${ui.choiceSubmitted
+          ? `
               <div class="notice-box ${isCorrectChoice ? "notice-success" : "notice-danger"}" style="margin-top: 14px;">
                 ${isCorrectChoice ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
                 <div class="notice-content">
@@ -268,17 +279,17 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
                 </div>
               </div>
             `
-                : ""
-            }
+          : ""
+        }
           </div>
         `
-            : !ui.revealed
-              ? `
+        : !ui.revealed
+          ? `
           <div class="btn-row">
             <button class="btn btn-primary" type="button" id="vocab-reveal-btn">顯示答案（再選擇熟悉度完成）</button>
           </div>
         `
-              : `
+          : `
           <div class="flashcard-answer">
             <div class="flashcard-kana" lang="ja">
               ${escapeHtml(item.kana)}${ui.showKatakana ? `（${escapeHtml(katakanaReading)}）` : ""}
@@ -315,7 +326,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             </div>
           </div>
         `
-        }
+      }
 
         <div class="btn-row card-divider">
           <button class="btn" type="button" id="vocab-prev-btn" ${total <= 1 ? "disabled" : ""}>上一張</button>
@@ -392,7 +403,15 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
         today
       );
       state = updateState({ ...state, vocabProgress: nextVocabProgress });
+      ui.pinnedCard = current;
       ui.choiceSubmitted = true;
+      render();
+    });
+
+    container.querySelector("#vocab-mark-review-btn")?.addEventListener("click", () => {
+      if (!current) return;
+      const nextMarks = toggleReviewMark(state.reviewMarks, "vocab", current.id);
+      state = updateState({ ...state, reviewMarks: nextMarks });
       render();
     });
 
@@ -417,6 +436,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     });
 
     const goNext = () => {
+      ui.pinnedCard = null;
       const nextList = getFilteredList();
       if (nextList.length > 0) {
         ui.index = (ui.index + 1) % nextList.length;

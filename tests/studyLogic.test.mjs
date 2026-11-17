@@ -6,6 +6,8 @@ import { GRAMMAR_LIST } from "../src/data/grammar.js";
 import { QUIZ_LIST } from "../src/data/quizzes.js";
 import {
   hiraganaToKatakana,
+  getDailyQuizSet,
+  toggleReviewMark,
   addDays,
   isVocabDue,
   rateVocabCard,
@@ -206,4 +208,23 @@ test("漢字平假名標音轉換與純文字還原正確", () => {
     "<ruby>来月<rt>らいげつ</rt></ruby>の<ruby>旅行<rt>りょこう</rt></ruby>"
   );
   assert.equal(stripRubyMarkup("{来月|らいげつ}の{旅行|りょこう}"), "来月の旅行");
+});
+
+test("每日題組依日期穩定產生且跨日更新", () => {
+  const day1A = getDailyQuizSet(QUIZ_LIST, "2026-11-17", 10).map((q) => q.id);
+  const day1B = getDailyQuizSet(QUIZ_LIST, "2026-11-17", 10).map((q) => q.id);
+  const day2 = getDailyQuizSet(QUIZ_LIST, "2026-11-18", 10).map((q) => q.id);
+  assert.equal(day1A.length, 10);
+  assert.deepEqual(day1A, day1B);
+  assert.notDeepEqual(day1A, day2);
+});
+
+test("標記待複習可獨立切換並保存", () => {
+  let marks = { vocab: {}, quiz: {} };
+  marks = toggleReviewMark(marks, "vocab", "vocab_n4_001");
+  assert.equal(marks.vocab["vocab_n4_001"], true);
+  marks = toggleReviewMark(marks, "quiz", "quiz_005");
+  assert.equal(marks.quiz["quiz_005"], true);
+  marks = toggleReviewMark(marks, "vocab", "vocab_n4_001");
+  assert.equal(marks.vocab["vocab_n4_001"], undefined);
 });

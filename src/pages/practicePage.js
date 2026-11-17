@@ -1,14 +1,21 @@
 import { QUIZ_LIST } from "../data/quizzes.js";
-import { prepareQuizQuestion, recordQuizSubmission, shuffleArray } from "../core/studyLogic.js";
+import {
+  getDailyQuizSet,
+  getLocalDateString,
+  prepareQuizQuestion,
+  recordQuizSubmission,
+  shuffleArray,
+  toggleReviewMark
+} from "../core/studyLogic.js";
 import { escapeHtml, renderRubyText, stripRubyMarkup } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderPracticePage(container, { state, updateState, params = {} }) {
   const ui = {
-    wrongOnly: Boolean(params.wrongOnly),
+    mode: params.wrongOnly ? "wrong" : "daily", // "daily" | "all" | "wrong" | "marked"
     shuffleOptions: true,
-    shuffleQuestions: true,
+    shuffleQuestions: false,
     sessionIds: null,
     index: 0,
     combo: 0,
@@ -19,10 +26,22 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     preparedKey: ""
   };
 
+  function getBasePool() {
+    const today = getLocalDateString();
+    if (ui.mode === "daily") {
+      return getDailyQuizSet(QUIZ_LIST, today, 10);
+    }
+    if (ui.mode === "wrong") {
+      return QUIZ_LIST.filter((q) => Object.prototype.hasOwnProperty.call(state.wrongBook || {}, q.id));
+    }
+    if (ui.mode === "marked") {
+      return QUIZ_LIST.filter((q) => Boolean(state.reviewMarks?.quiz?.[q.id]));
+    }
+    return QUIZ_LIST;
+  }
+
   function rebuildSessionPool() {
-    const base = ui.wrongOnly
-      ? QUIZ_LIST.filter((q) => Object.prototype.hasOwnProperty.call(state.wrongBook || {}, q.id))
-      : QUIZ_LIST;
+    const base = getBasePool();
     const ordered = ui.shuffleQuestions ? shuffleArray(base) : base;
     ui.sessionIds = ordered.map((q) => q.id);
     ui.index = 0;
@@ -35,9 +54,13 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     }
     const byId = new Map(QUIZ_LIST.map((q) => [q.id, q]));
     const pool = ui.sessionIds.map((id) => byId.get(id)).filter(Boolean);
-    if (ui.wrongOnly) {
+    if (ui.mode === "wrong") {
       const wrongIds = new Set(Object.keys(state.wrongBook || {}));
       return pool.filter((q) => wrongIds.has(q.id));
+    }
+    if (ui.mode === "marked") {
+      const markedIds = new Set(Object.keys(state.reviewMarks?.quiz || {}));
+      return pool.filter((q) => markedIds.has(q.id));
     }
     return pool;
   }
@@ -52,7 +75,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       ui.index = 0;
     }
     const raw = pool[ui.index];
-    const key = `${raw.id}:${ui.shuffleOptions ? "s" : "o"}:${ui.wrongOnly ? "w" : "a"}:${ui.index}`;
+    const key = `${raw.id}:${ui.shuffleOptions ? "s" : "o"}:${ui.mode}:${ui.index}`;
     if (ui.preparedKey !== key) {
       ui.preparedQuestion = prepareQuizQuestion(raw, ui.shuffleOptions);
       ui.preparedKey = key;
@@ -64,25 +87,33 @@ export function renderPracticePage(container, { state, updateState, params = {} 
   }
 
   function render() {
+    const today = getLocalDateString();
     const pool = getQuestionPool();
     const current = ensurePrepared(pool);
     const wrongEntries = Object.values(state.wrongBook || {});
+    const markedCount = Object.keys(state.reviewMarks?.quiz || {}).length;
 
     container.innerHTML = `
       <div class="page-header">
         <h2 class="page-title">練習與錯題本</h2>
         <p class="page-desc">
-          共 ${QUIZ_LIST.length} 題 N4→N3 練習題，所有漢字皆附平假名標音。作答紀錄與錯題本會永久保存於目前瀏覽器（不限當天）。
+          今日日期：${today}｜「今日每日題組」每天自動更換 10 題，也可切換練習全部 ${QUIZ_LIST.length} 題、錯題本或標記待複習題目。
         </p>
       </div>
 
       <div class="filter-bar">
         <div class="btn-row" style="margin-top: 0;">
-          <button class="btn ${!ui.wrongOnly ? "btn-primary" : ""}" type="button" id="mode-all-btn">
-            全部練習（${QUIZ_LIST.length} 題）
+          <button class="btn ${ui.mode === "daily" ? "btn-primary" : ""}" type="button" id="mode-daily-btn">
+            今日每日 10 題
           </button>
-          <button class="btn ${ui.wrongOnly ? "btn-primary" : ""}" type="button" id="mode-wrong-btn">
+          <button class="btn ${ui.mode === "all" ? "btn-primary" : ""}" type="button" id="mode-all-btn">
+            全部題庫（${QUIZ_LIST.length} 題）
+          </button>
+          <button class="btn ${ui.mode === "wrong" ? "btn-primary" : ""}" type="button" id="mode-wrong-btn">
             只練錯題（${wrongEntries.length} 題）
+          </button>
+          <button class="btn ${ui.mode === "marked" ? "btn-primary" : ""}" type="button" id="mode-marked-btn">
+            標記待複習（${markedCount} 題）
           </button>
         </div>
 
@@ -96,17 +127,21 @@ export function renderPracticePage(container, { state, updateState, params = {} 
           <span class="filter-label">隨機抽題順序</span>
         </label>
 
-        <button class="btn" type="button" id="reshuffle-session-btn">重新隨機出題</button>
+        <button class="btn" type="button" id="reshuffle-session-btn">重新洗牌</button>
       </div>
 
       ${
         !current
           ? `
         <section class="card empty-state">
-          <h3 class="card-title">目前沒有錯題可練習</h3>
-          <p class="page-desc">太棒了！錯題本目前是空的，您可以切換回「全部練習」繼續做題。</p>
+          <h3 class="card-title">${ui.mode === "marked" ? "目前沒有標記待複習的題目" : "目前沒有錯題可練習"}</h3>
+          <p class="page-desc">${
+            ui.mode === "marked"
+              ? "作答時可點擊「標記此題待複習」，系統就會幫您存起來。"
+              : "太棒了！錯題本目前是空的，您可以切換回「今日每日 10 題」或「全部題庫」繼續做題。"
+          }</p>
           <div class="btn-row" style="justify-content: center;">
-            <button class="btn btn-primary" type="button" id="empty-back-all-btn">切換為全部練習</button>
+            <button class="btn btn-primary" type="button" id="empty-back-all-btn">切換為今日每日 10 題</button>
           </div>
         </section>
       `
@@ -130,6 +165,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     const speechAvailable = isSpeechSupported();
     const progressPct = Math.round(((ui.index + (ui.submitted ? 1 : 0)) / total) * 100);
     const plainPrompt = stripRubyMarkup(question.prompt);
+    const isMarked = Boolean(state.reviewMarks?.quiz?.[question.id]);
 
     return `
       <section class="card">
@@ -148,6 +184,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         <div class="badge-row" style="margin-bottom: 12px;">
           <span class="badge badge-primary">${escapeHtml(question.levelCategory)} 分類</span>
           <span class="badge">${escapeHtml(question.reviewStatus)}</span>
+          ${isMarked ? `<span class="badge badge-warning">★ 已標記待複習</span>` : ""}
           <span class="badge">題號：${escapeHtml(question.id)}</span>
         </div>
 
@@ -164,6 +201,14 @@ export function renderPracticePage(container, { state, updateState, params = {} 
               >
                 ${LUCIDE_ICONS.volume2}
                 <span>朗讀題目</span>
+              </button>
+              <button
+                class="btn ${isMarked ? "btn-warning" : ""}"
+                type="button"
+                id="quiz-mark-review-btn"
+              >
+                ${LUCIDE_ICONS.star}
+                <span>${isMarked ? "已標記待複習（點擊取消）" : "標記此題待複習"}</span>
               </button>
             </div>
           </div>
@@ -256,20 +301,32 @@ export function renderPracticePage(container, { state, updateState, params = {} 
   }
 
   function bindEvents(pool, current) {
+    container.querySelector("#mode-daily-btn")?.addEventListener("click", () => {
+      ui.mode = "daily";
+      rebuildSessionPool();
+      render();
+    });
+
     container.querySelector("#mode-all-btn")?.addEventListener("click", () => {
-      ui.wrongOnly = false;
+      ui.mode = "all";
       rebuildSessionPool();
       render();
     });
 
     container.querySelector("#mode-wrong-btn")?.addEventListener("click", () => {
-      ui.wrongOnly = true;
+      ui.mode = "wrong";
+      rebuildSessionPool();
+      render();
+    });
+
+    container.querySelector("#mode-marked-btn")?.addEventListener("click", () => {
+      ui.mode = "marked";
       rebuildSessionPool();
       render();
     });
 
     container.querySelector("#empty-back-all-btn")?.addEventListener("click", () => {
-      ui.wrongOnly = false;
+      ui.mode = "daily";
       rebuildSessionPool();
       render();
     });
@@ -287,7 +344,15 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     });
 
     container.querySelector("#reshuffle-session-btn")?.addEventListener("click", () => {
+      ui.shuffleQuestions = true;
       rebuildSessionPool();
+      render();
+    });
+
+    container.querySelector("#quiz-mark-review-btn")?.addEventListener("click", () => {
+      if (!current) return;
+      const nextMarks = toggleReviewMark(state.reviewMarks, "quiz", current.id);
+      state = updateState({ ...state, reviewMarks: nextMarks });
       render();
     });
 

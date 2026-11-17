@@ -83,6 +83,40 @@ export function shuffleArray(items, rng = Math.random) {
   return copy;
 }
 
+function createSeededRng(seedStr) {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i += 1) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return function next() {
+    h += 0x6d2b79f5;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function getDailyQuizSet(quizList, dateStr, count = 10) {
+  const rng = createSeededRng(`nihongo-step-daily-${dateStr}`);
+  return shuffleArray(quizList, rng).slice(0, Math.min(count, quizList.length));
+}
+
+export function toggleReviewMark(reviewMarks, kind, itemId) {
+  const current = reviewMarks || { vocab: {}, quiz: {} };
+  const bucket = { ...(current[kind] || {}) };
+  if (bucket[itemId]) {
+    delete bucket[itemId];
+  } else {
+    bucket[itemId] = true;
+  }
+  return {
+    vocab: current.vocab || {},
+    quiz: current.quiz || {},
+    [kind]: bucket
+  };
+}
+
 export function prepareQuizQuestion(question, shouldShuffle = true, rng = Math.random) {
   return {
     ...question,
