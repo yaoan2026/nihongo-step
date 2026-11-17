@@ -10,10 +10,19 @@ import {
 import { escapeHtml, renderRubyText, stripRubyMarkup } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
+import {
+  checkJapaneseSentenceWithAi,
+  explainQuizWithAi,
+  findCachedAiQuizById,
+  generateDailyAiQuizzes,
+  loadCachedDailyAiQuizzes,
+  loadGeminiKey,
+  loadGeminiModel
+} from "../core/geminiAi.js";
 
-export function renderPracticePage(container, { state, updateState, params = {} }) {
+export function renderPracticePage(container, { state, updateState, navigate, params = {} }) {
   const ui = {
-    mode: params.wrongOnly ? "wrong" : "daily", // "daily" | "all" | "wrong" | "marked"
+    mode: params.wrongOnly ? "wrong" : "daily", // "daily" | "ai" | "all" | "wrong" | "marked"
     shuffleOptions: true,
     shuffleQuestions: false,
     sessionIds: null,
@@ -23,11 +32,33 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     submitted: false,
     lastResult: null,
     preparedQuestion: null,
-    preparedKey: ""
+    preparedKey: "",
+    aiLoading: false,
+    aiError: "",
+    aiExplainLoading: false,
+    aiExplainText: "",
+    aiExplainError: "",
+    sentenceInput: "",
+    sentenceLoading: false,
+    sentenceFeedback: "",
+    sentenceError: ""
   };
 
-  function getBasePool() {
+  function getActiveQuizSource() {
     const today = getLocalDateString();
+    const cachedAi = loadCachedDailyAiQuizzes(today) || [];
+    const byId = new Map(QUIZ_LIST.map((q) => [q.id, q]));
+    for (const q of cachedAi) {
+      byId.set(q.id, q);
+    }
+    return { today, cachedAi, byId };
+  }
+
+  function getBasePool() {
+    const { today, cachedAi } = getActiveQuizSource();
+    if (ui.mode === "ai") {
+      return cachedAi;
+    }
     if (ui.mode === "daily") {
       return getDailyQuizSet(QUIZ_LIST, today, 10);
     }
@@ -52,7 +83,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     if (!ui.sessionIds) {
       rebuildSessionPool();
     }
-    const byId = new Map(QUIZ_LIST.map((q) => [q.id, q]));
+    const { byId } = getActiveQuizSource();
     const pool = ui.sessionIds.map((id) => byId.get(id)).filter(Boolean);
     if (ui.mode === "wrong") {
       const wrongIds = new Set(Object.keys(state.wrongBook || {}));
@@ -82,22 +113,26 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       ui.selectedOptionId = null;
       ui.submitted = false;
       ui.lastResult = null;
+      ui.aiExplainText = "";
+      ui.aiExplainError = "";
+      ui.aiExplainLoading = false;
     }
     return ui.preparedQuestion;
   }
 
   function render() {
-    const today = getLocalDateString();
+    const { today, cachedAi } = getActiveQuizSource();
     const pool = getQuestionPool();
     const current = ensurePrepared(pool);
     const wrongEntries = Object.values(state.wrongBook || {});
     const markedCount = Object.keys(state.reviewMarks?.quiz || {}).length;
+    const apiKey = loadGeminiKey();
 
     container.innerHTML = `
       <div class="page-header">
         <h2 class="page-title">練習與錯題本</h2>
         <p class="page-desc">
-          今日日期：${today}｜「今日每日題組」每天自動更換 10 題，也可切換練習全部 ${QUIZ_LIST.length} 題、錯題本或標記待複習題目。
+          今日日期：${today}｜可切換「今日每日 10 題」、「AI 每日新題（10 題）」、全部 ${QUIZ_LIST.length} 題、錯題本或標記待複習題目。
         </p>
       </div>
 
@@ -105,6 +140,9 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         <div class="btn-row" style="margin-top: 0;">
           <button class="btn ${ui.mode === "daily" ? "btn-primary" : ""}" type="button" id="mode-daily-btn">
             今日每日 10 題
+          </button>
+          <button class="btn ${ui.mode === "ai" ? "btn-blue" : ""}" type="button" id="mode-ai-btn">
+            AI 每日新題（${cachedAi.length > 0 ? `${cachedAi.length} 題` : "即時生成"}）
           </button>
           <button class="btn ${ui.mode === "all" ? "btn-primary" : ""}" type="button" id="mode-all-btn">
             全部題庫（${QUIZ_LIST.length} 題）
@@ -130,9 +168,13 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         <button class="btn" type="button" id="reshuffle-session-btn">重新洗牌</button>
       </div>
 
+      ${ui.mode === "ai" ? renderAiPanel(apiKey, cachedAi) : ""}
+
       ${
         !current
-          ? `
+          ? ui.mode === "ai"
+            ? ""
+            : `
         <section class="card empty-state">
           <h3 class="card-title">${ui.mode === "marked" ? "目前沒有標記待複習的題目" : "目前沒有錯題可練習"}</h3>
           <p class="page-desc">${
@@ -145,8 +187,10 @@ export function renderPracticePage(container, { state, updateState, params = {} 
           </div>
         </section>
       `
-          : renderQuizCard(current, pool.length)
+          : renderQuizCard(current, pool.length, apiKey)
       }
+
+      ${renderSentenceCheckerCard(apiKey)}
 
       <section class="card">
         <h3 class="section-heading">錯題本紀錄（共 ${wrongEntries.length} 題）</h3>
@@ -158,10 +202,48 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       </section>
     `;
 
-    bindEvents(pool, current);
+    bindEvents(pool, current, apiKey);
   }
 
-  function renderQuizCard(question, total) {
+  function renderAiPanel(apiKey, cachedAi) {
+    if (!apiKey) {
+      return `
+        <section class="card">
+          <h3 class="card-title">尚未設定 Gemini API Key</h3>
+          <p class="page-desc">請先到「學習紀錄與設定」填入您自己的 Gemini API Key（僅存在目前瀏覽器，不會外流），即可啟用 AI 每日全新出題。</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" id="go-records-for-key">前往設定 API Key</button>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="card" style="margin-bottom: 16px;">
+        <div class="badge-row">
+          <span class="badge badge-primary">Gemini AI 模式</span>
+          <span class="badge">${cachedAi.length > 0 ? `今日已緩存 ${cachedAi.length} 題` : "今日尚未生成"}</span>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" type="button" id="generate-ai-quizzes-btn" ${ui.aiLoading ? "disabled" : ""}>
+            ${ui.aiLoading ? "AI 正在出題中，請稍候…" : cachedAi.length > 0 ? "重新生成一組 AI 新題（10 題）" : "生成今日 AI 全新 10 題"}
+          </button>
+        </div>
+        ${
+          ui.aiError
+            ? `
+          <div class="notice-box notice-danger" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.x}
+            <div class="notice-content">${escapeHtml(ui.aiError)}</div>
+          </div>
+        `
+            : ""
+        }
+      </section>
+    `;
+  }
+
+  function renderQuizCard(question, total, apiKey) {
     const speechAvailable = isSpeechSupported();
     const progressPct = Math.round(((ui.index + (ui.submitted ? 1 : 0)) / total) * 100);
     const plainPrompt = stripRubyMarkup(question.prompt);
@@ -258,9 +340,63 @@ export function renderPracticePage(container, { state, updateState, params = {} 
               <strong>${ui.lastResult.isCorrect ? "太棒了！答對了！（+10 XP）" : "再接再厲，答錯了"}</strong><br />
               <span>正確答案：<strong lang="ja">${renderRubyText(ui.lastResult.correctOption?.text || "")}</strong></span><br />
               <span>解析：${escapeHtml(question.explanation)}</span>
+
+              ${
+                apiKey
+                  ? `
+                <div class="btn-row" style="margin-top: 10px;">
+                  <button class="btn" type="button" id="ai-explain-btn" ${ui.aiExplainLoading ? "disabled" : ""}>
+                    ${ui.aiExplainLoading ? "AI 老師撰寫解析中…" : "請 AI 老師詳細解析"}
+                  </button>
+                </div>
+              `
+                  : ""
+              }
             </div>
           </div>
+          ${
+            ui.aiExplainError
+              ? `<div class="notice-box notice-danger" style="margin-top: 10px;">${LUCIDE_ICONS.x}<div class="notice-content">${escapeHtml(ui.aiExplainError)}</div></div>`
+              : ""
+          }
+          ${
+            ui.aiExplainText
+              ? `<div class="notice-box notice-info" style="margin-top: 10px;">${LUCIDE_ICONS.owl}<div class="notice-content" style="white-space: pre-line;"><strong>AI 老師詳細說明：</strong>\n${escapeHtml(ui.aiExplainText)}</div></div>`
+              : ""
+          }
         `
+            : ""
+        }
+      </section>
+    `;
+  }
+
+  function renderSentenceCheckerCard(apiKey) {
+    if (!apiKey) {
+      return "";
+    }
+    return `
+      <section class="card">
+        <h3 class="section-heading">AI 日文造句批改</h3>
+        <p class="page-desc">試著用剛學到的 N4／N3 單字或文法造一句日文，讓 Gemini AI 幫您檢查語法與自然度。</p>
+        <textarea
+          id="ai-sentence-input"
+          rows="2"
+          placeholder="例如：毎日日本語を勉強することにしました。"
+        >${escapeHtml(ui.sentenceInput)}</textarea>
+        <div class="btn-row">
+          <button class="btn btn-blue" type="button" id="ai-check-sentence-btn" ${ui.sentenceLoading ? "disabled" : ""}>
+            ${ui.sentenceLoading ? "AI 批改中…" : "送出 AI 批改"}
+          </button>
+        </div>
+        ${
+          ui.sentenceError
+            ? `<div class="notice-box notice-danger" style="margin-top: 12px;">${LUCIDE_ICONS.x}<div class="notice-content">${escapeHtml(ui.sentenceError)}</div></div>`
+            : ""
+        }
+        ${
+          ui.sentenceFeedback
+            ? `<div class="notice-box notice-info" style="margin-top: 12px;">${LUCIDE_ICONS.owl}<div class="notice-content" style="white-space: pre-line;">${escapeHtml(ui.sentenceFeedback)}</div></div>`
             : ""
         }
       </section>
@@ -272,7 +408,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       <div class="stack">
         ${wrongEntries
           .map((entry) => {
-            const q = QUIZ_LIST.find((item) => item.id === entry.questionId);
+            const q = QUIZ_LIST.find((item) => item.id === entry.questionId) || findCachedAiQuizById(entry.questionId);
             const statusHtml = entry.lastIsCorrect
               ? `${LUCIDE_ICONS.check}<span>最近已重新答對（保留歷史紀錄）</span>`
               : `${LUCIDE_ICONS.x}<span>最近仍答錯（建議重練）</span>`;
@@ -288,7 +424,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
                   <span class="badge ${statusClass}">${statusHtml}</span>
                   <span class="badge badge-warning">累計答錯 ${entry.wrongCount} 次</span>
                 </div>
-                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${renderRubyText(q?.prompt || "題目不存在")}</div>
+                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${renderRubyText(q?.prompt || "（歷史 AI 題目）")}</div>
                 <div class="flashcard-meta">
                   最近錯選：<span lang="ja">${renderRubyText(entry.lastWrongOptionText)}</span>｜最近作答：${escapeHtml(timeText)}
                 </div>
@@ -300,9 +436,15 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     `;
   }
 
-  function bindEvents(pool, current) {
+  function bindEvents(pool, current, apiKey) {
     container.querySelector("#mode-daily-btn")?.addEventListener("click", () => {
       ui.mode = "daily";
+      rebuildSessionPool();
+      render();
+    });
+
+    container.querySelector("#mode-ai-btn")?.addEventListener("click", () => {
+      ui.mode = "ai";
       rebuildSessionPool();
       render();
     });
@@ -329,6 +471,31 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       ui.mode = "daily";
       rebuildSessionPool();
       render();
+    });
+
+    container.querySelector("#go-records-for-key")?.addEventListener("click", () => {
+      navigate("records");
+    });
+
+    container.querySelector("#generate-ai-quizzes-btn")?.addEventListener("click", async () => {
+      if (ui.aiLoading) return;
+      ui.aiLoading = true;
+      ui.aiError = "";
+      render();
+      try {
+        await generateDailyAiQuizzes({
+          apiKey,
+          model: loadGeminiModel(),
+          dateStr: getLocalDateString(),
+          count: 10
+        });
+        rebuildSessionPool();
+      } catch (err) {
+        ui.aiError = err?.message || "AI 出題失敗，請稍後再試。";
+      } finally {
+        ui.aiLoading = false;
+        render();
+      }
     });
 
     container.querySelector("#shuffle-toggle")?.addEventListener("change", (e) => {
@@ -387,6 +554,50 @@ export function renderPracticePage(container, { state, updateState, params = {} 
       ui.index = (ui.index + 1) % pool.length;
       ui.preparedKey = "";
       render();
+    });
+
+    container.querySelector("#ai-explain-btn")?.addEventListener("click", async () => {
+      if (!current || !ui.lastResult || ui.aiExplainLoading) return;
+      ui.aiExplainLoading = true;
+      ui.aiExplainError = "";
+      render();
+      try {
+        ui.aiExplainText = await explainQuizWithAi({
+          apiKey,
+          model: loadGeminiModel(),
+          question: current,
+          selectedOptionText: ui.lastResult.selectedOption?.text || "",
+          correctOptionText: ui.lastResult.correctOption?.text || ""
+        });
+      } catch (err) {
+        ui.aiExplainError = err?.message || "無法取得 AI 解析，請稍後再試。";
+      } finally {
+        ui.aiExplainLoading = false;
+        render();
+      }
+    });
+
+    container.querySelector("#ai-sentence-input")?.addEventListener("input", (e) => {
+      ui.sentenceInput = e.target.value;
+    });
+
+    container.querySelector("#ai-check-sentence-btn")?.addEventListener("click", async () => {
+      if (ui.sentenceLoading) return;
+      ui.sentenceLoading = true;
+      ui.sentenceError = "";
+      render();
+      try {
+        ui.sentenceFeedback = await checkJapaneseSentenceWithAi({
+          apiKey,
+          model: loadGeminiModel(),
+          sentence: ui.sentenceInput
+        });
+      } catch (err) {
+        ui.sentenceError = err?.message || "AI 批改失敗，請稍後再試。";
+      } finally {
+        ui.sentenceLoading = false;
+        render();
+      }
     });
 
     container.querySelectorAll("[data-speak-ja]").forEach((btn) => {

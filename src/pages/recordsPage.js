@@ -10,12 +10,20 @@ import {
 import { getLocalDateString } from "../core/studyLogic.js";
 import { escapeHtml, renderRubyText } from "../core/dom.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
+import {
+  DEFAULT_GEMINI_MODEL,
+  loadGeminiKey,
+  loadGeminiModel,
+  saveGeminiKey,
+  saveGeminiModel
+} from "../core/geminiAi.js";
 
 export function renderRecordsPage(container, { state, updateState }) {
   const ui = {
     importPreview: null,
     importError: "",
     statusMessage: "",
+    aiStatusMessage: "",
     confirmReset: false
   };
 
@@ -29,6 +37,8 @@ export function renderRecordsPage(container, { state, updateState }) {
     const totalCorrect = state.quizStats?.totalCorrect || 0;
     const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
     const wrongCount = Object.keys(state.wrongBook || {}).length;
+    const savedKey = loadGeminiKey();
+    const savedModel = loadGeminiModel();
 
     container.innerHTML = `
       <div class="page-header">
@@ -55,6 +65,51 @@ export function renderRecordsPage(container, { state, updateState }) {
             <div><strong>練習累計：</strong>答對 ${totalCorrect} / ${totalAnswered} 題（正確率 ${accuracy}%）｜錯題紀錄 ${wrongCount} 題</div>
           </div>
         </div>
+      </section>
+
+      <section class="card">
+        <h3 class="section-heading">Gemini AI 模式設定</h3>
+        <p class="page-desc">
+          填入您的 Gemini API Key 後，即可在「練習與錯題本」使用 <strong>AI 每日全新 10 題</strong>、<strong>AI 老師詳細解析</strong> 與 <strong>AI 造句批改</strong>。API Key 僅保存於此瀏覽器，不會上傳到 GitHub，也不會匯出到備份 JSON。
+        </p>
+
+        <div class="stack">
+          <div>
+            <label class="filter-label" for="gemini-key-input">Gemini API Key（目前狀態：${savedKey ? "已設定" : "尚未設定"}）</label>
+            <input
+              type="password"
+              id="gemini-key-input"
+              placeholder="貼上您的 AIza... API Key"
+              value="${escapeHtml(savedKey)}"
+              autocomplete="off"
+              style="margin-top: 6px;"
+            />
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label" for="gemini-model-select">模型選擇</label>
+            <select id="gemini-model-select">
+              <option value="gemini-2.5-flash" ${savedModel === "gemini-2.5-flash" ? "selected" : ""}>gemini-2.5-flash（推薦，速度快、免費額度友善）</option>
+              <option value="gemini-2.0-flash" ${savedModel === "gemini-2.0-flash" ? "selected" : ""}>gemini-2.0-flash</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" type="button" id="save-gemini-btn">儲存 AI 設定</button>
+          <button class="btn" type="button" id="clear-gemini-btn" ${savedKey ? "" : "disabled"}>清除 API Key</button>
+        </div>
+
+        ${
+          ui.aiStatusMessage
+            ? `
+          <div class="notice-box notice-success" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.check}
+            <div class="notice-content"><strong>${escapeHtml(ui.aiStatusMessage)}</strong></div>
+          </div>
+        `
+            : ""
+        }
       </section>
 
       <section class="card">
@@ -172,6 +227,23 @@ export function renderRecordsPage(container, { state, updateState }) {
   }
 
   function bindEvents() {
+    container.querySelector("#save-gemini-btn")?.addEventListener("click", () => {
+      const keyInput = container.querySelector("#gemini-key-input");
+      const modelSelect = container.querySelector("#gemini-model-select");
+      saveGeminiKey(keyInput?.value || "");
+      saveGeminiModel(modelSelect?.value || DEFAULT_GEMINI_MODEL);
+      ui.aiStatusMessage = loadGeminiKey()
+        ? "已儲存 Gemini API Key 與模型設定，可前往練習頁開啟 AI 模式。"
+        : "已清除 Gemini API Key。";
+      render();
+    });
+
+    container.querySelector("#clear-gemini-btn")?.addEventListener("click", () => {
+      saveGeminiKey("");
+      ui.aiStatusMessage = "已清除 Gemini API Key。";
+      render();
+    });
+
     container.querySelector("#export-json-btn")?.addEventListener("click", () => {
       const jsonText = exportStateJson(state);
       const blob = new Blob([jsonText], { type: "application/json;charset=utf-8" });

@@ -21,6 +21,7 @@ import {
   renderRubyText,
   stripRubyMarkup
 } from "../src/core/dom.js";
+import { validateAiQuizList } from "../src/core/geminiAi.js";
 import {
   createDefaultState,
   exportStateJson,
@@ -227,4 +228,26 @@ test("標記待複習可獨立切換並保存", () => {
   assert.equal(marks.quiz["quiz_005"], true);
   marks = toggleReviewMark(marks, "vocab", "vocab_n4_001");
   assert.equal(marks.vocab["vocab_n4_001"], undefined);
+});
+
+test("AI 回傳題目驗證與正規化正確", () => {
+  const sample = [
+    {
+      levelCategory: "N3",
+      prompt: "{明日|あした}は{雨|あめ}が（　）そうです。",
+      options: [
+        { id: "opt_a", text: "{降|ふ}り" },
+        { id: "opt_b", text: "{降|ふ}る" },
+        { id: "opt_c", text: "{降|ふ}って" },
+        { id: "opt_d", text: "{降|ふ}った" }
+      ],
+      correctOptionId: "opt_a",
+      explanation: "様態助動詞そうです接連用形。"
+    }
+  ];
+  const validated = validateAiQuizList(sample, "2026-11-17");
+  assert.equal(validated.length, 1);
+  assert.equal(validated[0].id, "ai_2026-11-17_01");
+  assert.equal(validated[0].correctOptionId, "opt_a");
+  assert.throws(() => validateAiQuizList([], "2026-11-17"));
 });
