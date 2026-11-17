@@ -150,13 +150,21 @@ export async function fetchAvailableGeminiModels(apiKey) {
   return models;
 }
 
+async function singleGeminiRequest({ key, model, body }) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
 async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMode = false }) {
   const key = String(apiKey || "").trim();
   if (!key) {
     throw new Error("請先至「學習紀錄與設定」填入您的 Gemini API Key。");
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: jsonMode
@@ -164,29 +172,49 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
       : { temperature: 0.5 }
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  const candidates = Array.from(
+    new Set([model, "gemini-3.5-flash-lite", "gemini-3.8-flash"].filter(Boolean))
+  );
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
+  let lastStatus = 0;
+  let lastErrText = "";
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const targetModel = candidates[i];
+    const res = await singleGeminiRequest({ key, model: targetModel, body });
+
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new Error("Gemini API 未回傳文字內容，請稍後再試。");
+      }
+      return text;
+    }
+
+    lastStatus = res.status;
+    lastErrText = await res.text().catch(() => "");
+
     if (res.status === 400 || res.status === 403) {
       throw new Error("Gemini API Key 無效或權限不足，請檢查設定中的 API Key。");
     }
-    if (res.status === 429) {
-      throw new Error("已達 Gemini API 速率或免費額度上限，請稍後再試。");
+
+    // 503 (High demand) / 429 / 404 (model unavailable) -> 短暫等待後自動嘗試下一個備援模型
+    if (res.status === 503 || res.status === 429 || res.status === 404) {
+      await new Promise((r) => setTimeout(r, 700));
+      continue;
     }
-    throw new Error(`Gemini API 呼叫失敗（HTTP ${res.status}）${errText ? `：${errText.slice(0, 120)}` : ""}`);
+
+    throw new Error(`Gemini API 呼叫失敗（HTTP ${res.status}）${lastErrText ? `：${lastErrText.slice(0, 120)}` : ""}`);
   }
 
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini API 未回傳文字內容，請稍後再試。");
+  if (lastStatus === 503 || lastErrText.toLowerCase().includes("high demand")) {
+    throw new Error("Google AI 伺服器目前尖峰負載中（High Demand），已自動切換備援模型仍忙碌，請等 10～20 秒後再試一次。");
   }
-  return text;
+  if (lastStatus === 429) {
+    throw new Error("已達 Gemini API 速率或免費額度上限，請稍後再試。");
+  }
+  throw new Error(`Gemini API 暫時無法回應（HTTP ${lastStatus}），請稍後再試。`);
 }
 
 export async function generateDailyAiQuizzes({

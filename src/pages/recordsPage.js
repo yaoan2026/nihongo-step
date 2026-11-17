@@ -98,11 +98,11 @@ export function renderRecordsPage(container, { state, updateState }) {
             <label class="filter-label" for="gemini-model-select">模型選擇</label>
             <select id="gemini-model-select">
               ${modelOptions
-                .map(
-                  (m) =>
-                    `<option value="${escapeHtml(m)}" ${savedModel === m ? "selected" : ""}>${escapeHtml(m)}${m === DEFAULT_GEMINI_MODEL ? "（推薦預設）" : ""}</option>`
-                )
-                .join("")}
+        .map(
+          (m) =>
+            `<option value="${escapeHtml(m)}" ${savedModel === m ? "selected" : ""}>${escapeHtml(m)}${m === DEFAULT_GEMINI_MODEL ? "（推薦預設）" : ""}</option>`
+        )
+        .join("")}
             </select>
             <button class="btn" type="button" id="detect-models-btn" ${ui.aiDetecting ? "disabled" : ""}>
               ${ui.aiDetecting ? "偵測中…" : "自動偵測可用模型"}
@@ -115,27 +115,25 @@ export function renderRecordsPage(container, { state, updateState }) {
           <button class="btn" type="button" id="clear-gemini-btn" ${savedKey ? "" : "disabled"}>清除 API Key</button>
         </div>
 
-        ${
-          ui.aiErrorMessage
-            ? `
+        ${ui.aiErrorMessage
+        ? `
           <div class="notice-box notice-danger" style="margin-top: 12px;">
             ${LUCIDE_ICONS.x}
             <div class="notice-content">${escapeHtml(ui.aiErrorMessage)}</div>
           </div>
         `
-            : ""
-        }
+        : ""
+      }
 
-        ${
-          ui.aiStatusMessage
-            ? `
+        ${ui.aiStatusMessage
+        ? `
           <div class="notice-box notice-success" style="margin-top: 12px;">
             ${LUCIDE_ICONS.check}
             <div class="notice-content"><strong>${escapeHtml(ui.aiStatusMessage)}</strong></div>
           </div>
         `
-            : ""
-        }
+        : ""
+      }
       </section>
 
       <section class="card">
@@ -151,20 +149,18 @@ export function renderRecordsPage(container, { state, updateState }) {
           <input type="file" id="import-json-input" accept=".json,application/json" style="margin-top: 8px;" />
         </div>
 
-        ${
-          ui.importError
-            ? `
+        ${ui.importError
+        ? `
           <div class="notice-box notice-danger" style="margin-top: 12px;">
             ${LUCIDE_ICONS.x}
             <div class="notice-content"><strong>匯入失敗：</strong>${escapeHtml(ui.importError)}</div>
           </div>
         `
-            : ""
-        }
+        : ""
+      }
 
-        ${
-          ui.importPreview
-            ? `
+        ${ui.importPreview
+        ? `
           <div class="notice-box notice-warning" style="margin-top: 12px;">
             ${LUCIDE_ICONS.alertTriangle}
             <div class="notice-content">
@@ -178,36 +174,34 @@ export function renderRecordsPage(container, { state, updateState }) {
             </div>
           </div>
         `
-            : ""
-        }
+        : ""
+      }
 
-        ${
-          ui.statusMessage
-            ? `
+        ${ui.statusMessage
+        ? `
           <div class="notice-box notice-success" style="margin-top: 12px;">
             ${LUCIDE_ICONS.check}
             <div class="notice-content"><strong>${escapeHtml(ui.statusMessage)}</strong></div>
           </div>
         `
-            : ""
-        }
+        : ""
+      }
       </section>
 
       <section class="card">
         <h3 class="section-heading">全部作答歷史紀錄（永久保存於此瀏覽器）</h3>
         <p class="page-desc">每次作答皆會跨日保留（最近保留最多 200 筆）。</p>
-        ${
-          !state.quizHistory || state.quizHistory.length === 0
-            ? `<p class="page-desc">目前尚無作答紀錄。</p>`
-            : `
+        ${!state.quizHistory || state.quizHistory.length === 0
+        ? `<p class="page-desc">目前尚無作答紀錄。</p>`
+        : `
           <div class="stack">
             ${state.quizHistory
-              .slice(0, 20)
-              .map((h) => {
-                const timeText = h.answeredAt
-                  ? new Date(h.answeredAt).toLocaleString("zh-TW", { hour12: false })
-                  : "未知";
-                return `
+          .slice(0, 20)
+          .map((h) => {
+            const timeText = h.answeredAt
+              ? new Date(h.answeredAt).toLocaleString("zh-TW", { hour12: false })
+              : "未知";
+            return `
                   <div class="example-box">
                     <div class="badge-row">
                       <span class="badge">${escapeHtml(h.questionId)}</span>
@@ -219,21 +213,20 @@ export function renderRecordsPage(container, { state, updateState }) {
                     <div class="flashcard-meta">選擇：<span lang="ja">${renderRubyText(h.selectedOptionText)}</span></div>
                   </div>
                 `;
-              })
-              .join("")}
+          })
+          .join("")}
           </div>
         `
-        }
+      }
       </section>
 
       <section class="card">
         <h3 class="section-heading" style="color: var(--danger);">重設學習紀錄</h3>
         <p class="page-desc">將清除目前瀏覽器內所有的單字進度、文法閱讀狀態、練習統計與錯題本。</p>
 
-        ${
-          !ui.confirmReset
-            ? `<div class="btn-row"><button class="btn btn-danger" type="button" id="ask-reset-btn">重設所有學習紀錄</button></div>`
-            : `
+        ${!ui.confirmReset
+        ? `<div class="btn-row"><button class="btn btn-danger" type="button" id="ask-reset-btn">重設所有學習紀錄</button></div>`
+        : `
           <div class="notice-box notice-danger" style="margin-top: 12px;">
             ${LUCIDE_ICONS.alertTriangle}
             <div class="notice-content">
@@ -245,7 +238,7 @@ export function renderRecordsPage(container, { state, updateState }) {
             </div>
           </div>
         `
-        }
+      }
       </section>
     `;
 
