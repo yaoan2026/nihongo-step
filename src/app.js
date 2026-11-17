@@ -21,6 +21,7 @@ let pendingParams = {};
 function updateState(nextState) {
   appState = nextState;
   saveState(appState);
+  return appState;
 }
 
 function getRouteFromHash() {

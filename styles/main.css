@@ -147,7 +147,18 @@ body {
 
 [lang="ja"] {
   font-family: var(--font-ja);
-  line-height: 1.85;
+  line-height: 2.1;
+}
+
+ruby {
+  ruby-align: center;
+}
+
+rt {
+  font-size: 0.56em;
+  color: var(--text-muted);
+  font-weight: 500;
+  user-select: none;
 }
 
 .icon-svg {
@@ -304,6 +315,44 @@ body {
   color: var(--text-muted);
   font-size: var(--text-sm);
   line-height: 1.65;
+}
+
+/* 距離 N3 總進度條卡片 */
+.n3-goal-card {
+  background: var(--surface);
+  border: 2px solid var(--duo-green-border);
+  border-bottom-width: 4px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.n3-goal-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.n3-goal-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.n3-goal-pct {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--duo-green-text);
+}
+
+.n3-goal-sub {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 /* Duolingo 頂部狀態列（連勝 / XP / 進度） */

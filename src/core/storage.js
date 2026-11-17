@@ -9,7 +9,8 @@ export function createDefaultState() {
       totalAnswered: 0,
       totalCorrect: 0
     },
-    wrongBook: {}
+    wrongBook: {},
+    quizHistory: []
   };
 }
 
@@ -62,7 +63,8 @@ export function exportStateJson(state, nowIso = new Date().toISOString()) {
     vocabProgress: state.vocabProgress || {},
     grammarProgress: state.grammarProgress || {},
     quizStats: state.quizStats || { totalAnswered: 0, totalCorrect: 0 },
-    wrongBook: state.wrongBook || {}
+    wrongBook: state.wrongBook || {},
+    quizHistory: Array.isArray(state.quizHistory) ? state.quizHistory : []
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -113,7 +115,8 @@ export function validateImportPayload(rawText, expectedSchemaVersion = STUDY_CON
       totalAnswered: parsed.quizStats.totalAnswered,
       totalCorrect: parsed.quizStats.totalCorrect
     },
-    wrongBook: parsed.wrongBook
+    wrongBook: parsed.wrongBook,
+    quizHistory: Array.isArray(parsed.quizHistory) ? parsed.quizHistory : []
   };
 
   const summary = {

@@ -16,6 +16,10 @@ import {
   recordQuizSubmission
 } from "../src/core/studyLogic.js";
 import {
+  renderRubyText,
+  stripRubyMarkup
+} from "../src/core/dom.js";
+import {
   createDefaultState,
   exportStateJson,
   validateImportPayload,
@@ -38,7 +42,7 @@ function createMemoryStorage() {
 test("教材數量與唯一 ID 及校對標示檢查", () => {
   assert.equal(VOCAB_LIST.length, 20);
   assert.equal(GRAMMAR_LIST.length, 5);
-  assert.equal(QUIZ_LIST.length, 15);
+  assert.equal(QUIZ_LIST.length, 40);
 
   const allIds = [
     ...VOCAB_LIST.map((v) => v.id),
@@ -194,4 +198,12 @@ test("平假名轉換片假名輔助函式正確轉換", () => {
   assert.equal(hiraganaToKatakana("きめる"), "キメル");
   assert.equal(hiraganaToKatakana("まにあう"), "マニアウ");
   assert.equal(hiraganaToKatakana("あんしん"), "アンシン");
+});
+
+test("漢字平假名標音轉換與純文字還原正確", () => {
+  assert.equal(
+    renderRubyText("{来月|らいげつ}の{旅行|りょこう}"),
+    "<ruby>来月<rt>らいげつ</rt></ruby>の<ruby>旅行<rt>りょこう</rt></ruby>"
+  );
+  assert.equal(stripRubyMarkup("{来月|らいげつ}の{旅行|りょこう}"), "来月の旅行");
 });

@@ -160,7 +160,7 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-toggle-read");
         const next = toggleGrammarRead(state.grammarProgress, id, new Date().toISOString());
-        updateState({ ...state, grammarProgress: next });
+        state = updateState({ ...state, grammarProgress: next });
         render();
       });
     });
@@ -170,7 +170,7 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
         const id = btn.getAttribute("data-grammar-id");
         const mastery = btn.getAttribute("data-mastery");
         const next = setGrammarMastery(state.grammarProgress, id, mastery);
-        updateState({ ...state, grammarProgress: next });
+        state = updateState({ ...state, grammarProgress: next });
         render();
       });
     });

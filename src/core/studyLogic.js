@@ -147,11 +147,22 @@ export function recordQuizSubmission({
     };
   }
 
+  const nextQuizHistory = [
+    {
+      questionId: question.id,
+      isCorrect: grade.isCorrect,
+      selectedOptionText: grade.selectedOption.text,
+      answeredAt: nowIso
+    },
+    ...(state.quizHistory || [])
+  ].slice(0, 200);
+
   return {
     state: {
       ...state,
       quizStats: nextQuizStats,
-      wrongBook: nextWrongBook
+      wrongBook: nextWrongBook,
+      quizHistory: nextQuizHistory
     },
     result: grade,
     duplicateBlocked: false

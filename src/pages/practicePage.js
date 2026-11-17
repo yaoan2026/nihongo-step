@@ -1,6 +1,6 @@
 import { QUIZ_LIST } from "../data/quizzes.js";
-import { prepareQuizQuestion, recordQuizSubmission } from "../core/studyLogic.js";
-import { escapeHtml } from "../core/dom.js";
+import { prepareQuizQuestion, recordQuizSubmission, shuffleArray } from "../core/studyLogic.js";
+import { escapeHtml, renderRubyText, stripRubyMarkup } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 
@@ -8,6 +8,8 @@ export function renderPracticePage(container, { state, updateState, params = {} 
   const ui = {
     wrongOnly: Boolean(params.wrongOnly),
     shuffleOptions: true,
+    shuffleQuestions: true,
+    sessionIds: null,
     index: 0,
     combo: 0,
     selectedOptionId: null,
@@ -17,12 +19,27 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     preparedKey: ""
   };
 
+  function rebuildSessionPool() {
+    const base = ui.wrongOnly
+      ? QUIZ_LIST.filter((q) => Object.prototype.hasOwnProperty.call(state.wrongBook || {}, q.id))
+      : QUIZ_LIST;
+    const ordered = ui.shuffleQuestions ? shuffleArray(base) : base;
+    ui.sessionIds = ordered.map((q) => q.id);
+    ui.index = 0;
+    ui.preparedKey = "";
+  }
+
   function getQuestionPool() {
-    if (!ui.wrongOnly) {
-      return QUIZ_LIST;
+    if (!ui.sessionIds) {
+      rebuildSessionPool();
     }
-    const wrongIds = new Set(Object.keys(state.wrongBook || {}));
-    return QUIZ_LIST.filter((q) => wrongIds.has(q.id));
+    const byId = new Map(QUIZ_LIST.map((q) => [q.id, q]));
+    const pool = ui.sessionIds.map((id) => byId.get(id)).filter(Boolean);
+    if (ui.wrongOnly) {
+      const wrongIds = new Set(Object.keys(state.wrongBook || {}));
+      return pool.filter((q) => wrongIds.has(q.id));
+    }
+    return pool;
   }
 
   function ensurePrepared(pool) {
@@ -54,7 +71,9 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     container.innerHTML = `
       <div class="page-header">
         <h2 class="page-title">練習與錯題本</h2>
-        <p class="page-desc">單選題練習支援選項隨機打亂，並依選項 ID 判分。答錯的題目會自動收入下方錯題本，同一題不會重複建立卡片。</p>
+        <p class="page-desc">
+          共 ${QUIZ_LIST.length} 題 N4→N3 練習題，所有漢字皆附平假名標音。作答紀錄與錯題本會永久保存於目前瀏覽器（不限當天）。
+        </p>
       </div>
 
       <div class="filter-bar">
@@ -69,8 +88,15 @@ export function renderPracticePage(container, { state, updateState, params = {} 
 
         <label class="checkbox-inline">
           <input type="checkbox" id="shuffle-toggle" ${ui.shuffleOptions ? "checked" : ""} />
-          <span class="filter-label">打亂選項順序</span>
+          <span class="filter-label">打亂選項</span>
         </label>
+
+        <label class="checkbox-inline">
+          <input type="checkbox" id="shuffle-questions-toggle" ${ui.shuffleQuestions ? "checked" : ""} />
+          <span class="filter-label">隨機抽題順序</span>
+        </label>
+
+        <button class="btn" type="button" id="reshuffle-session-btn">重新隨機出題</button>
       </div>
 
       ${
@@ -103,6 +129,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
   function renderQuizCard(question, total) {
     const speechAvailable = isSpeechSupported();
     const progressPct = Math.round(((ui.index + (ui.submitted ? 1 : 0)) / total) * 100);
+    const plainPrompt = stripRubyMarkup(question.prompt);
 
     return `
       <section class="card">
@@ -127,12 +154,12 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         <div class="duo-mascot-row">
           <div class="duo-mascot-avatar" aria-hidden="true">${LUCIDE_ICONS.owl}</div>
           <div class="duo-speech-bubble">
-            <div class="quiz-prompt" lang="ja">${escapeHtml(question.prompt)}</div>
+            <div class="quiz-prompt" lang="ja">${renderRubyText(question.prompt)}</div>
             <div class="btn-row" style="margin-top: 10px;">
               <button
                 class="btn"
                 type="button"
-                data-speak-ja="${escapeHtml(question.prompt)}"
+                data-speak-ja="${escapeHtml(plainPrompt)}"
                 ${speechAvailable ? "" : "disabled"}
               >
                 ${LUCIDE_ICONS.volume2}
@@ -156,7 +183,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
                     ${checked ? "checked" : ""}
                     ${ui.submitted ? "disabled" : ""}
                   />
-                  <span lang="ja">${escapeHtml(opt.text)}</span>
+                  <span lang="ja">${renderRubyText(opt.text)}</span>
                 </label>
               `;
             })
@@ -184,7 +211,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
             ${ui.lastResult.isCorrect ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
             <div class="notice-content">
               <strong>${ui.lastResult.isCorrect ? "太棒了！答對了！（+10 XP）" : "再接再厲，答錯了"}</strong><br />
-              <span>正確答案：<strong lang="ja">${escapeHtml(ui.lastResult.correctOption?.text || "")}</strong></span><br />
+              <span>正確答案：<strong lang="ja">${renderRubyText(ui.lastResult.correctOption?.text || "")}</strong></span><br />
               <span>解析：${escapeHtml(question.explanation)}</span>
             </div>
           </div>
@@ -216,9 +243,9 @@ export function renderPracticePage(container, { state, updateState, params = {} 
                   <span class="badge ${statusClass}">${statusHtml}</span>
                   <span class="badge badge-warning">累計答錯 ${entry.wrongCount} 次</span>
                 </div>
-                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${escapeHtml(q?.prompt || "題目不存在")}</div>
+                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${renderRubyText(q?.prompt || "題目不存在")}</div>
                 <div class="flashcard-meta">
-                  最近錯選：<span lang="ja">${escapeHtml(entry.lastWrongOptionText)}</span>｜最近作答：${escapeHtml(timeText)}
+                  最近錯選：<span lang="ja">${renderRubyText(entry.lastWrongOptionText)}</span>｜最近作答：${escapeHtml(timeText)}
                 </div>
               </div>
             `;
@@ -231,28 +258,36 @@ export function renderPracticePage(container, { state, updateState, params = {} 
   function bindEvents(pool, current) {
     container.querySelector("#mode-all-btn")?.addEventListener("click", () => {
       ui.wrongOnly = false;
-      ui.index = 0;
-      ui.preparedKey = "";
+      rebuildSessionPool();
       render();
     });
 
     container.querySelector("#mode-wrong-btn")?.addEventListener("click", () => {
       ui.wrongOnly = true;
-      ui.index = 0;
-      ui.preparedKey = "";
+      rebuildSessionPool();
       render();
     });
 
     container.querySelector("#empty-back-all-btn")?.addEventListener("click", () => {
       ui.wrongOnly = false;
-      ui.index = 0;
-      ui.preparedKey = "";
+      rebuildSessionPool();
       render();
     });
 
     container.querySelector("#shuffle-toggle")?.addEventListener("change", (e) => {
       ui.shuffleOptions = e.target.checked;
       ui.preparedKey = "";
+      render();
+    });
+
+    container.querySelector("#shuffle-questions-toggle")?.addEventListener("change", (e) => {
+      ui.shuffleQuestions = e.target.checked;
+      rebuildSessionPool();
+      render();
+    });
+
+    container.querySelector("#reshuffle-session-btn")?.addEventListener("click", () => {
+      rebuildSessionPool();
       render();
     });
 
@@ -274,7 +309,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         nowIso: new Date().toISOString()
       });
       if (!outcome.duplicateBlocked) {
-        updateState(outcome.state);
+        state = updateState(outcome.state);
         ui.submitted = true;
         ui.lastResult = outcome.result;
         ui.combo = outcome.result?.isCorrect ? ui.combo + 1 : 0;

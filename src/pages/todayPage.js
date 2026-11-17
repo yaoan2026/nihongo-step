@@ -23,9 +23,18 @@ export function renderTodayPage(container, { state, navigate }) {
   const unresolvedWrongCount = wrongEntries.filter((w) => !w.lastIsCorrect).length;
 
   const vocabReviewedCount = Object.keys(state.vocabProgress || {}).length;
+  const vocabFamiliarCount = Object.values(state.vocabProgress || {}).filter(
+    (v) => v?.familiarity === "familiar"
+  ).length;
   const grammarReadCount = Object.values(state.grammarProgress || {}).filter((g) => g?.isRead).length;
   const totalCorrect = state.quizStats?.totalCorrect || 0;
   const totalXp = vocabReviewedCount * 10 + grammarReadCount * 15 + totalCorrect * 10;
+
+  // 距離 N3 綜合進度（單字 40% + 文法 30% + 測驗答對 30%，以題庫 40 題為基準）
+  const vocabRatio = VOCAB_LIST.length > 0 ? Math.min(1, vocabReviewedCount / VOCAB_LIST.length) : 0;
+  const grammarRatio = GRAMMAR_LIST.length > 0 ? Math.min(1, grammarReadCount / GRAMMAR_LIST.length) : 0;
+  const quizRatio = QUIZ_LIST.length > 0 ? Math.min(1, totalCorrect / QUIZ_LIST.length) : 0;
+  const n3ProgressPct = Math.round((vocabRatio * 0.4 + grammarRatio * 0.3 + quizRatio * 0.3) * 100);
 
   const primaryAction = n4Due > 0
     ? { route: "vocab", params: { levelFilter: "N4" }, label: "開始 N4 單字關卡" }
@@ -40,6 +49,19 @@ export function renderTodayPage(container, { state, navigate }) {
       <h2 class="page-title">今日學習路徑</h2>
       <p class="page-desc">今日日期：${today}｜依序完成關卡，累積學習 XP。</p>
     </div>
+
+    <section class="n3-goal-card" aria-label="距離 N3 學習進度">
+      <div class="n3-goal-header">
+        <span class="n3-goal-title">距離 N3 目標進度條</span>
+        <span class="n3-goal-pct">${n3ProgressPct}%</span>
+      </div>
+      <div class="duo-progress-track">
+        <div class="duo-progress-fill" style="width: ${n3ProgressPct}%;"></div>
+      </div>
+      <p class="n3-goal-sub">
+        單字已學 ${vocabReviewedCount}/${VOCAB_LIST.length}（熟悉 ${vocabFamiliarCount}）｜文法已讀 ${grammarReadCount}/${GRAMMAR_LIST.length}｜測驗答對 ${totalCorrect}/${QUIZ_LIST.length} 題
+      </p>
+    </section>
 
     <div class="duo-stats-bar">
       <div class="duo-stat-pill">

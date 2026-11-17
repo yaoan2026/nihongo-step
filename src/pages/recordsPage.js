@@ -8,7 +8,7 @@ import {
   resetState
 } from "../core/storage.js";
 import { getLocalDateString } from "../core/studyLogic.js";
-import { escapeHtml } from "../core/dom.js";
+import { escapeHtml, renderRubyText } from "../core/dom.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderRecordsPage(container, { state, updateState }) {
@@ -113,6 +113,39 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
+        <h3 class="section-heading">全部作答歷史紀錄（永久保存於此瀏覽器）</h3>
+        <p class="page-desc">每次作答皆會跨日保留（最近保留最多 200 筆）。</p>
+        ${
+          !state.quizHistory || state.quizHistory.length === 0
+            ? `<p class="page-desc">目前尚無作答紀錄。</p>`
+            : `
+          <div class="stack">
+            ${state.quizHistory
+              .slice(0, 20)
+              .map((h) => {
+                const timeText = h.answeredAt
+                  ? new Date(h.answeredAt).toLocaleString("zh-TW", { hour12: false })
+                  : "未知";
+                return `
+                  <div class="example-box">
+                    <div class="badge-row">
+                      <span class="badge">${escapeHtml(h.questionId)}</span>
+                      <span class="badge ${h.isCorrect ? "badge-success" : "badge-danger"}">
+                        ${h.isCorrect ? `${LUCIDE_ICONS.check}<span>答對</span>` : `${LUCIDE_ICONS.x}<span>答錯</span>`}
+                      </span>
+                      <span class="badge">${escapeHtml(timeText)}</span>
+                    </div>
+                    <div class="flashcard-meta">選擇：<span lang="ja">${renderRubyText(h.selectedOptionText)}</span></div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        `
+        }
+      </section>
+
+      <section class="card">
         <h3 class="section-heading" style="color: var(--danger);">重設學習紀錄</h3>
         <p class="page-desc">將清除目前瀏覽器內所有的單字進度、文法閱讀狀態、練習統計與錯題本。</p>
 
@@ -178,8 +211,7 @@ export function renderRecordsPage(container, { state, updateState }) {
 
     container.querySelector("#confirm-import-btn")?.addEventListener("click", () => {
       if (!ui.importPreview) return;
-      const next = applyImportedState(ui.importPreview.data);
-      updateState(next);
+      state = updateState(applyImportedState(ui.importPreview.data));
       ui.importPreview = null;
       ui.importError = "";
       ui.statusMessage = "已成功匯入並還原學習紀錄。";
@@ -203,8 +235,7 @@ export function renderRecordsPage(container, { state, updateState }) {
     });
 
     container.querySelector("#confirm-reset-btn")?.addEventListener("click", () => {
-      const fresh = resetState();
-      updateState(fresh);
+      state = updateState(resetState());
       ui.confirmReset = false;
       ui.statusMessage = "已重設所有學習紀錄。";
       render();
