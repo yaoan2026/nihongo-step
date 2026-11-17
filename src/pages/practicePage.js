@@ -9,6 +9,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
     wrongOnly: Boolean(params.wrongOnly),
     shuffleOptions: true,
     index: 0,
+    combo: 0,
     selectedOptionId: null,
     submitted: false,
     lastResult: null,
@@ -101,34 +102,53 @@ export function renderPracticePage(container, { state, updateState, params = {} 
 
   function renderQuizCard(question, total) {
     const speechAvailable = isSpeechSupported();
+    const progressPct = Math.round(((ui.index + (ui.submitted ? 1 : 0)) / total) * 100);
+
     return `
       <section class="card">
-        <div class="badge-row">
+        <div class="duo-progress-row" aria-label="練習進度">
+          <div class="duo-progress-track">
+            <div class="duo-progress-fill" style="width: ${progressPct}%;"></div>
+          </div>
+          <span class="duo-progress-text">第 ${ui.index + 1} / ${total} 題</span>
+          ${
+            ui.combo >= 2
+              ? `<span class="badge badge-warning">連對 ${ui.combo} 題</span>`
+              : ""
+          }
+        </div>
+
+        <div class="badge-row" style="margin-bottom: 12px;">
           <span class="badge badge-primary">${escapeHtml(question.levelCategory)} 分類</span>
           <span class="badge">${escapeHtml(question.reviewStatus)}</span>
-          <span class="badge">第 ${ui.index + 1} / ${total} 題</span>
           <span class="badge">題號：${escapeHtml(question.id)}</span>
         </div>
 
-        <div class="quiz-prompt" lang="ja">${escapeHtml(question.prompt)}</div>
-        <div class="btn-row">
-          <button
-            class="btn"
-            type="button"
-            data-speak-ja="${escapeHtml(question.prompt)}"
-            ${speechAvailable ? "" : "disabled"}
-          >
-            ${LUCIDE_ICONS.volume2}
-            <span>朗讀題目</span>
-          </button>
+        <div class="duo-mascot-row">
+          <div class="duo-mascot-avatar" aria-hidden="true">${LUCIDE_ICONS.owl}</div>
+          <div class="duo-speech-bubble">
+            <div class="quiz-prompt" lang="ja">${escapeHtml(question.prompt)}</div>
+            <div class="btn-row" style="margin-top: 10px;">
+              <button
+                class="btn"
+                type="button"
+                data-speak-ja="${escapeHtml(question.prompt)}"
+                ${speechAvailable ? "" : "disabled"}
+              >
+                ${LUCIDE_ICONS.volume2}
+                <span>朗讀題目</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="option-list" role="radiogroup" aria-label="單選題選項">
           ${question.options
-            .map((opt) => {
+            .map((opt, idx) => {
               const checked = ui.selectedOptionId === opt.id;
               return `
                 <label class="option-label ${checked ? "selected" : ""}">
+                  <span class="option-key">${idx + 1}</span>
                   <input
                     type="radio"
                     name="quiz-option"
@@ -150,10 +170,10 @@ export function renderPracticePage(container, { state, updateState, params = {} 
             id="submit-quiz-btn"
             ${ui.submitted || !ui.selectedOptionId ? "disabled" : ""}
           >
-            ${ui.submitted ? "已提交（不可重複計分）" : "提交答案"}
+            ${ui.submitted ? "已提交（不可重複計分）" : "檢查答案"}
           </button>
-          <button class="btn" type="button" id="next-quiz-btn" ${total <= 1 ? "disabled" : ""}>
-            下一題
+          <button class="btn btn-blue" type="button" id="next-quiz-btn" ${total <= 1 ? "disabled" : ""}>
+            繼續下一題
           </button>
         </div>
 
@@ -163,7 +183,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
           <div class="notice-box ${ui.lastResult.isCorrect ? "notice-success" : "notice-danger"}" style="margin-top: 16px;">
             ${ui.lastResult.isCorrect ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
             <div class="notice-content">
-              <strong>${ui.lastResult.isCorrect ? "答對了！" : "答錯了"}</strong><br />
+              <strong>${ui.lastResult.isCorrect ? "太棒了！答對了！（+10 XP）" : "再接再厲，答錯了"}</strong><br />
               <span>正確答案：<strong lang="ja">${escapeHtml(ui.lastResult.correctOption?.text || "")}</strong></span><br />
               <span>解析：${escapeHtml(question.explanation)}</span>
             </div>
@@ -257,6 +277,7 @@ export function renderPracticePage(container, { state, updateState, params = {} 
         updateState(outcome.state);
         ui.submitted = true;
         ui.lastResult = outcome.result;
+        ui.combo = outcome.result?.isCorrect ? ui.combo + 1 : 0;
         render();
       }
     });

@@ -5,9 +5,9 @@ import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 
-export function renderGrammarPage(container, { state, updateState }) {
+export function renderGrammarPage(container, { state, updateState, params = {} }) {
   const ui = {
-    levelFilter: "all",
+    levelFilter: params.levelFilter || "all",
     readFilter: "all"
   };
 

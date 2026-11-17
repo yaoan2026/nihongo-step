@@ -10,9 +10,9 @@ import { escapeHtml } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 
-export function renderVocabPage(container, { state, updateState }) {
+export function renderVocabPage(container, { state, updateState, params = {} }) {
   const ui = {
-    levelFilter: "all",
+    levelFilter: params.levelFilter || "all",
     groupFilter: "all",
     statusFilter: "due",
     showKatakana: false,
@@ -53,11 +53,20 @@ export function renderVocabPage(container, { state, updateState }) {
     }
     const current = list[ui.index] || null;
     const dueTotal = VOCAB_LIST.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
+    const reviewedCount = VOCAB_LIST.length - dueTotal;
+    const progressPct = Math.round((reviewedCount / VOCAB_LIST.length) * 100);
 
     container.innerHTML = `
       <div class="page-header">
         <h2 class="page-title">單字卡</h2>
         <p class="page-desc">先看題面回想讀音與意思，點擊「顯示答案」後再自行評估熟悉度（單純翻面不會自動計為已熟悉）。目前待複習總數：<strong>${dueTotal}</strong> 個。</p>
+      </div>
+
+      <div class="duo-progress-row" aria-label="今日單字完成進度">
+        <div class="duo-progress-track">
+          <div class="duo-progress-fill" style="width: ${progressPct}%;"></div>
+        </div>
+        <span class="duo-progress-text">今日已完成 ${reviewedCount} / ${VOCAB_LIST.length}</span>
       </div>
 
       <div class="filter-bar">
