@@ -12,6 +12,8 @@ import { escapeHtml, renderRubyText } from "../core/dom.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 import {
   DEFAULT_GEMINI_MODEL,
+  PRESET_GEMINI_MODELS,
+  fetchAvailableGeminiModels,
   loadGeminiKey,
   loadGeminiModel,
   saveGeminiKey,
@@ -24,6 +26,9 @@ export function renderRecordsPage(container, { state, updateState }) {
     importError: "",
     statusMessage: "",
     aiStatusMessage: "",
+    aiErrorMessage: "",
+    aiDetecting: false,
+    detectedModels: null,
     confirmReset: false
   };
 
@@ -39,6 +44,9 @@ export function renderRecordsPage(container, { state, updateState }) {
     const wrongCount = Object.keys(state.wrongBook || {}).length;
     const savedKey = loadGeminiKey();
     const savedModel = loadGeminiModel();
+    const modelOptions = Array.from(
+      new Set([...(ui.detectedModels || []), ...PRESET_GEMINI_MODELS, savedModel])
+    );
 
     container.innerHTML = `
       <div class="page-header">
@@ -89,9 +97,16 @@ export function renderRecordsPage(container, { state, updateState }) {
           <div class="filter-group">
             <label class="filter-label" for="gemini-model-select">模型選擇</label>
             <select id="gemini-model-select">
-              <option value="gemini-2.5-flash" ${savedModel === "gemini-2.5-flash" ? "selected" : ""}>gemini-2.5-flash（推薦，速度快、免費額度友善）</option>
-              <option value="gemini-2.0-flash" ${savedModel === "gemini-2.0-flash" ? "selected" : ""}>gemini-2.0-flash</option>
+              ${modelOptions
+                .map(
+                  (m) =>
+                    `<option value="${escapeHtml(m)}" ${savedModel === m ? "selected" : ""}>${escapeHtml(m)}${m === DEFAULT_GEMINI_MODEL ? "（推薦預設）" : ""}</option>`
+                )
+                .join("")}
             </select>
+            <button class="btn" type="button" id="detect-models-btn" ${ui.aiDetecting ? "disabled" : ""}>
+              ${ui.aiDetecting ? "偵測中…" : "自動偵測可用模型"}
+            </button>
           </div>
         </div>
 
@@ -99,6 +114,17 @@ export function renderRecordsPage(container, { state, updateState }) {
           <button class="btn btn-primary" type="button" id="save-gemini-btn">儲存 AI 設定</button>
           <button class="btn" type="button" id="clear-gemini-btn" ${savedKey ? "" : "disabled"}>清除 API Key</button>
         </div>
+
+        ${
+          ui.aiErrorMessage
+            ? `
+          <div class="notice-box notice-danger" style="margin-top: 12px;">
+            ${LUCIDE_ICONS.x}
+            <div class="notice-content">${escapeHtml(ui.aiErrorMessage)}</div>
+          </div>
+        `
+            : ""
+        }
 
         ${
           ui.aiStatusMessage
@@ -227,13 +253,38 @@ export function renderRecordsPage(container, { state, updateState }) {
   }
 
   function bindEvents() {
+    container.querySelector("#detect-models-btn")?.addEventListener("click", async () => {
+      const keyInput = container.querySelector("#gemini-key-input");
+      const keyVal = keyInput?.value?.trim() || loadGeminiKey();
+      ui.aiDetecting = true;
+      ui.aiErrorMessage = "";
+      ui.aiStatusMessage = "";
+      render();
+      try {
+        saveGeminiKey(keyVal);
+        const list = await fetchAvailableGeminiModels(keyVal);
+        ui.detectedModels = list;
+        if (list.length > 0 && !list.includes(loadGeminiModel())) {
+          const preferred = list.find((m) => m.includes("flash")) || list[0];
+          saveGeminiModel(preferred);
+        }
+        ui.aiStatusMessage = `已偵測到 ${list.length} 個可用模型，請確認下拉選單後按「儲存 AI 設定」。`;
+      } catch (err) {
+        ui.aiErrorMessage = err?.message || "偵測失敗，請檢查 API Key。";
+      } finally {
+        ui.aiDetecting = false;
+        render();
+      }
+    });
+
     container.querySelector("#save-gemini-btn")?.addEventListener("click", () => {
       const keyInput = container.querySelector("#gemini-key-input");
       const modelSelect = container.querySelector("#gemini-model-select");
       saveGeminiKey(keyInput?.value || "");
       saveGeminiModel(modelSelect?.value || DEFAULT_GEMINI_MODEL);
+      ui.aiErrorMessage = "";
       ui.aiStatusMessage = loadGeminiKey()
-        ? "已儲存 Gemini API Key 與模型設定，可前往練習頁開啟 AI 模式。"
+        ? `已儲存 Gemini API Key 與模型（${loadGeminiModel()}），可前往練習頁開啟 AI 模式。`
         : "已清除 Gemini API Key。";
       render();
     });

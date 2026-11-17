@@ -4,7 +4,13 @@ const API_KEY_STORAGE_KEY = "nihongo_step_gemini_api_key";
 const MODEL_STORAGE_KEY = "nihongo_step_gemini_model";
 const DAILY_AI_PREFIX = "nihongo_step_ai_daily_";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+
+export const PRESET_GEMINI_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-pro"
+];
 
 export function loadGeminiKey(storage = globalThis.localStorage) {
   try {
@@ -29,7 +35,11 @@ export function saveGeminiKey(apiKey, storage = globalThis.localStorage) {
 
 export function loadGeminiModel(storage = globalThis.localStorage) {
   try {
-    return storage?.getItem(MODEL_STORAGE_KEY) || DEFAULT_GEMINI_MODEL;
+    const saved = storage?.getItem(MODEL_STORAGE_KEY);
+    if (!saved || saved.startsWith("gemini-2.")) {
+      return DEFAULT_GEMINI_MODEL;
+    }
+    return saved;
   } catch {
     return DEFAULT_GEMINI_MODEL;
   }
@@ -120,6 +130,24 @@ export function validateAiQuizList(rawList, dateStr) {
     throw new Error("無法解析出有效的選擇題，請重試一次。");
   }
   return normalized;
+}
+
+export async function fetchAvailableGeminiModels(apiKey) {
+  const key = String(apiKey || "").trim();
+  if (!key) {
+    throw new Error("請先填入 Gemini API Key 再偵測模型。");
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`無法取得模型清單（HTTP ${res.status}），請確認 API Key 是否有效。`);
+  }
+  const data = await res.json();
+  const models = (data?.models || [])
+    .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+    .map((m) => String(m.name || "").replace(/^models\//, ""))
+    .filter((id) => id.startsWith("gemini-"));
+  return models;
 }
 
 async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMode = false }) {
