@@ -159,6 +159,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -1502,6 +1506,11 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
+}
+
+.tower-overlay[hidden],
+.tower-toast[hidden] {
+  display: none;
 }
 
 .tower-overlay-card {

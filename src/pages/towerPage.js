@@ -146,35 +146,41 @@ export function renderTowerPage(container) {
   }
 
   function renderToastDom() {
-    const el = container.querySelector("#tower-toast");
-    if (!el) return;
-    if (ui.toastMsg) {
-      el.textContent = ui.toastMsg;
-      el.hidden = false;
-    } else {
-      el.hidden = true;
+    const slot = container.querySelector("#tower-toast-slot");
+    if (!slot) return;
+    if (!ui.toastMsg) {
+      slot.innerHTML = "";
+      return;
     }
+    slot.innerHTML = `<div id="tower-toast" class="tower-toast" role="status" aria-live="polite">${escapeHtml(
+      ui.toastMsg
+    )}</div>`;
   }
 
   function renderOverlayDom() {
-    const el = container.querySelector("#tower-overlay");
-    if (!el) return;
+    const slot = container.querySelector("#tower-overlay-slot");
+    if (!slot) return;
     if (!ui.overlay) {
-      el.hidden = true;
+      slot.innerHTML = "";
       return;
     }
-    el.hidden = false;
-    const badgeEl = el.querySelector("#tower-overlay-badge");
-    const titleEl = el.querySelector("#tower-overlay-title");
-    const subEl = el.querySelector("#tower-overlay-sub");
-    const countEl = el.querySelector("#tower-overlay-count");
-    if (badgeEl) badgeEl.textContent = ui.overlay.badge;
-    if (titleEl) titleEl.textContent = ui.overlay.title;
-    if (subEl) subEl.textContent = ui.overlay.sub;
-    if (countEl) {
-      countEl.textContent = ui.overlay.countdown ? String(ui.overlay.countdown) : "";
-      countEl.hidden = !ui.overlay.countdown;
-    }
+    const countdownHtml = ui.overlay.countdown
+      ? `<div id="tower-overlay-count" class="tower-overlay-count">${escapeHtml(
+          String(ui.overlay.countdown)
+        )}</div>`
+      : "";
+    slot.innerHTML = `
+      <div id="tower-overlay" class="tower-overlay">
+        <div class="tower-overlay-card" role="dialog" aria-modal="true" aria-labelledby="tower-overlay-title">
+          <div class="badge-row justify-center mb-3">
+            <span id="tower-overlay-badge" class="badge badge-accent">${escapeHtml(ui.overlay.badge)}</span>
+          </div>
+          <h2 id="tower-overlay-title" class="tower-overlay-title">${escapeHtml(ui.overlay.title)}</h2>
+          <p id="tower-overlay-sub" class="page-desc">${escapeHtml(ui.overlay.sub)}</p>
+          ${countdownHtml}
+        </div>
+      </div>
+    `;
   }
 
   function startGame(mode) {
@@ -831,17 +837,8 @@ export function renderTowerPage(container) {
 
     container.innerHTML = `
       ${bodyHtml}
-      <div id="tower-overlay" class="tower-overlay" hidden>
-        <div class="tower-overlay-card" role="dialog" aria-modal="true" aria-labelledby="tower-overlay-title">
-          <div class="badge-row justify-center mb-3">
-            <span id="tower-overlay-badge" class="badge badge-accent"></span>
-          </div>
-          <h2 id="tower-overlay-title" class="tower-overlay-title"></h2>
-          <p id="tower-overlay-sub" class="page-desc"></p>
-          <div id="tower-overlay-count" class="tower-overlay-count" hidden></div>
-        </div>
-      </div>
-      <div id="tower-toast" class="tower-toast" role="status" aria-live="polite" hidden></div>
+      <div id="tower-overlay-slot"></div>
+      <div id="tower-toast-slot"></div>
     `;
 
     renderOverlayDom();
