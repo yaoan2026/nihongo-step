@@ -48,8 +48,8 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
 
     container.innerHTML = `
       <div class="page-header">
-        <h2 class="page-title">文法筆記</h2>
-        <p class="page-desc">已閱讀：<strong>${readCount} / ${GRAMMAR_LIST.length}</strong> 篇。「已閱讀」與「熟練度」分開記錄，並可在每篇下方練習造句輸出。</p>
+        <h1 class="page-title">文法筆記</h1>
+        <p class="page-desc">已閱讀：<strong>${readCount} / ${GRAMMAR_LIST.length}</strong> 篇。「已閱讀」與「熟練度」分開記錄，可在各篇下方練習造句。</p>
       </div>
 
       <div class="filter-bar">
@@ -77,7 +77,7 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
           list.length === 0
             ? `
           <section class="card empty-state">
-            <h3 class="card-title">沒有符合條件的文法筆記</h3>
+            <h2 class="card-title">沒有符合條件的文法筆記</h2>
             <p class="page-desc">請嘗試調整上方分類或閱讀狀態篩選。</p>
           </section>
         `
@@ -102,32 +102,31 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
     const aiErr = ui.aiErrors[item.id] || "";
 
     return `
-      <article class="card ${isRead ? "" : "card-blush"}">
+      <article class="card ${isRead ? "" : "card-subtle"}">
         <div class="badge-row">
-          <span class="badge pill-blue">${escapeHtml(item.levelCategory)} 分類</span>
-          <span class="badge ${isRead ? "pill-green" : "pill-yellow"}">
+          <span class="badge badge-accent">${escapeHtml(item.levelCategory)}</span>
+          <span class="badge ${isRead ? "badge-correct" : "badge-warning"}">
             ${isRead ? `${LUCIDE_ICONS.check}<span>已閱讀</span>` : "未閱讀"}
           </span>
-          <span class="badge">熟練度：${escapeHtml(STUDY_CONFIG.grammarMasteryLabels[mastery])}</span>
-          <span class="badge">${escapeHtml(item.reviewStatus)}</span>
+          <span class="checklist-detail">熟練度：${escapeHtml(STUDY_CONFIG.grammarMasteryLabels[mastery])}・${escapeHtml(item.reviewStatus)}</span>
         </div>
 
-        <h3 class="card-title" style="margin-top: 12px; font-size: 1.375rem;" lang="ja">${escapeHtml(item.title)}</h3>
+        <h2 class="card-title mt-3" lang="ja">${escapeHtml(item.title)}</h2>
         <p><strong>意思：</strong>${escapeHtml(item.meaning)}</p>
         <p><strong>接續：</strong>${escapeHtml(item.connection)}</p>
         <p><strong>使用情境：</strong>${escapeHtml(item.situation)}</p>
 
         <div class="example-box">
-          <strong>例句（i+1 理解輸入）：</strong>
+          <strong>例句（語境理解）：</strong>
           ${item.examples
             .map(
               (ex) => `
             <div class="example-item">
-              <div lang="ja">${renderRubyText(ex.ja)}</div>
+              <div class="example-ja" lang="ja">${renderRubyText(ex.ja)}</div>
               <div class="example-zh">${escapeHtml(ex.zh)}</div>
               <div class="btn-row">
                 <button
-                  class="btn btn-pill-sm"
+                  class="btn btn-sm"
                   type="button"
                   data-speak-ja="${escapeHtml(stripRubyMarkup(ex.ja))}"
                   ${speechAvailable ? "" : "disabled"}
@@ -142,27 +141,31 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
             .join("")}
         </div>
 
-        <div class="notice-box notice-warning" style="margin-top: 12px;">
+        <div class="notice-box notice-warning mt-3">
           ${LUCIDE_ICONS.alertTriangle}
           <div class="notice-content">
-            <span class="pill pill-yellow" style="margin-right: 6px;">要注意</span>
-            ${escapeHtml(item.notes)}
+            <strong>補充提醒：</strong>${escapeHtml(item.notes)}
           </div>
         </div>
 
         <div class="btn-row card-divider">
-          <button class="btn ${isRead ? "btn-success" : "btn-primary"}" type="button" data-toggle-read="${escapeHtml(item.id)}">
-            ${isRead ? `${LUCIDE_ICONS.check}<span>已標記已閱讀（點擊取消）</span>` : "標記為已閱讀"}
+          <button
+            class="btn ${isRead ? "btn-correct" : ""}"
+            type="button"
+            data-toggle-read="${escapeHtml(item.id)}"
+            aria-pressed="${isRead}"
+          >
+            ${isRead ? `${LUCIDE_ICONS.check}<span>已閱讀（取消）</span>` : "標記為已閱讀"}
           </button>
         </div>
 
-        <div class="btn-row">
-          <span class="filter-label">熟練度（獨立於已閱讀）：</span>
+        <p class="filter-label mt-3">熟練度評估（與已閱讀分開記錄）：</p>
+        <div class="btn-row mt-0">
           ${["unrated", "unfamiliar", "somewhat", "familiar"]
             .map(
               (key) => `
             <button
-              class="btn btn-pill-sm ${mastery === key ? "btn-active" : ""}"
+              class="btn btn-sm ${mastery === key ? "btn-active" : ""}"
               type="button"
               data-grammar-id="${escapeHtml(item.id)}"
               data-mastery="${key}"
@@ -176,24 +179,25 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
 
         <div class="card-divider">
           <label class="filter-label" for="grammar-note-${escapeHtml(item.id)}">
-            ${LUCIDE_ICONS.edit} 主動輸出：用「${escapeHtml(item.title)}」造一句日文筆記
+            ${LUCIDE_ICONS.edit}
+            <span>造句筆記：用「${escapeHtml(item.title)}」寫一個例句</span>
           </label>
           <textarea
+            class="mt-2"
             id="grammar-note-${escapeHtml(item.id)}"
             data-note-input="${escapeHtml(item.id)}"
             rows="2"
-            placeholder="試著用這個文法寫一個自己的例句，記憶效果更好…"
-            style="margin-top: 8px;"
+            placeholder="用這個句型寫一句自己的日文例句…"
           >${escapeHtml(noteValue)}</textarea>
           <div class="btn-row">
             <button class="btn" type="button" data-save-note="${escapeHtml(item.id)}">
-              儲存我的例句
+              儲存例句
             </button>
             ${
               apiKey
                 ? `
-              <button class="btn btn-blue" type="button" data-ai-check-note="${escapeHtml(item.id)}" ${isAiBusy ? "disabled" : ""}>
-                ${isAiBusy ? "AI 批改中…" : "AI 批改此造句"}
+              <button class="btn btn-active" type="button" data-ai-check-note="${escapeHtml(item.id)}" ${isAiBusy ? "disabled" : ""}>
+                ${isAiBusy ? "批改中…" : "AI 批改造句"}
               </button>
             `
                 : ""
@@ -201,17 +205,17 @@ export function renderGrammarPage(container, { state, updateState, params = {} }
           </div>
           ${
             ui.savedNoticeId === item.id
-              ? `<div class="notice-box notice-success" style="margin-top: 8px;">${LUCIDE_ICONS.check}<div class="notice-content">已保存至本機造句筆記。</div></div>`
+              ? `<div class="notice-box notice-success mt-2">${LUCIDE_ICONS.check}<div class="notice-content">已儲存至本機造句筆記。</div></div>`
               : ""
           }
           ${
             aiErr
-              ? `<div class="notice-box notice-danger" style="margin-top: 8px;">${LUCIDE_ICONS.x}<div class="notice-content">${escapeHtml(aiErr)}</div></div>`
+              ? `<div class="notice-box notice-danger mt-2">${LUCIDE_ICONS.x}<div class="notice-content">${escapeHtml(aiErr)}</div></div>`
               : ""
           }
           ${
             aiText
-              ? `<div class="notice-box notice-info" style="margin-top: 8px;">${LUCIDE_ICONS.sparkles}<div class="notice-content" style="white-space: pre-line;">${escapeHtml(aiText)}</div></div>`
+              ? `<div class="notice-box notice-info mt-2">${LUCIDE_ICONS.messageCircle}<div class="notice-content pre-line">${escapeHtml(aiText)}</div></div>`
               : ""
           }
         </div>

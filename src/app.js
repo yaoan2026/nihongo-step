@@ -75,7 +75,10 @@ function initThemeToggle() {
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     btn.innerHTML = theme === "dark" ? LUCIDE_ICONS.sun : LUCIDE_ICONS.moon;
-    btn.setAttribute("aria-label", theme === "dark" ? "切換為淺色模式" : "切換為深色模式");
+    const label = theme === "dark" ? "切換為淺色模式" : "切換為深色模式";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+    btn.setAttribute("aria-pressed", String(theme === "dark"));
   }
 
   applyTheme(initialTheme);
@@ -89,6 +92,10 @@ function initThemeToggle() {
 
 function init() {
   initThemeToggle();
+  document.querySelector(".skip-link")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    document.getElementById("app-root")?.focus();
+  });
   const footer = document.getElementById("footer-disclaimer");
   if (footer) {
     footer.textContent = `${STUDY_CONFIG.appName}｜${STUDY_CONFIG.disclaimer.contentNotice}`;

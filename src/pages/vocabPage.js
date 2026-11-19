@@ -14,7 +14,7 @@ import { LUCIDE_ICONS } from "../core/icons.js";
 
 export function renderVocabPage(container, { state, updateState, params = {} }) {
   const ui = {
-    mode: "active-recall", // "active-recall"（高效推薦） | "quiz"（中文四選一快測）
+    mode: "active-recall", // "active-recall" | "quiz"
     contextFirst: false,
     levelFilter: params.levelFilter || "all",
     groupFilter: "all",
@@ -91,13 +91,13 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
 
     container.innerHTML = `
       <div class="page-header">
-        <h2 class="page-title">單字練習</h2>
+        <h1 class="page-title">單字練習</h1>
         <p class="page-desc">
-          推薦使用「主動回想翻卡」先不看選項提取記憶（可搭配「語境句子優先」從例句猜義），也可切換「中文四選一快測」。目前待複習總數：<strong>${dueTotal}</strong> 個。
+          以「主動回想翻卡」提取記憶（可搭配「語境句子優先」從例句推敲詞義），或切換「看日文選中文」。待複習總數：<strong>${dueTotal}</strong> 個。
         </p>
       </div>
 
-      <div class="progress-row" style="margin-bottom: 16px;" aria-label="今日單字完成進度">
+      <div class="progress-row mt-0 mb-3" aria-label="今日單字完成進度">
         <div class="progress-bar-track">
           <div class="progress-bar-fill" style="width: ${progressPct}%;"></div>
         </div>
@@ -105,12 +105,12 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       </div>
 
       <div class="filter-bar">
-        <div class="btn-row" style="margin-top: 0;">
-          <button class="btn ${ui.mode === "active-recall" ? "btn-primary" : ""}" type="button" id="vocab-mode-flashcard">
-            主動回想翻卡（推薦）
+        <div class="btn-row mt-0">
+          <button class="btn ${ui.mode === "active-recall" ? "btn-active" : ""}" type="button" id="vocab-mode-flashcard">
+            主動回想翻卡
           </button>
-          <button class="btn ${ui.mode === "quiz" ? "btn-primary" : ""}" type="button" id="vocab-mode-quiz">
-            看日文選中文（快測）
+          <button class="btn ${ui.mode === "quiz" ? "btn-active" : ""}" type="button" id="vocab-mode-quiz">
+            看日文選中文
           </button>
         </div>
 
@@ -170,9 +170,9 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
         !current
           ? `
         <section class="card empty-state">
-          <h3 class="card-title">目前沒有符合條件的單字</h3>
-          <p class="page-desc">${ui.statusFilter === "due" ? "太棒了！今日待複習的單字已全部完成。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
-          <div class="btn-row" style="justify-content: center;">
+          <h2 class="card-title">目前沒有符合條件的單字</h2>
+          <p class="page-desc">${ui.statusFilter === "due" ? "今日待複習的單字已全部完成。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
+          <div class="btn-row justify-center">
             <button class="btn btn-primary" type="button" id="vocab-show-all-btn">查看全部單字</button>
           </div>
         </section>
@@ -198,11 +198,9 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     return `
       <section class="card">
         <div class="badge-row">
-          <span class="badge pill-blue">${escapeHtml(item.levelCategory)} 分類</span>
-          <span class="badge">${escapeHtml(item.group)}</span>
-          <span class="badge">${escapeHtml(item.reviewStatus)}</span>
-          ${isMarked ? `<span class="badge pill-yellow">已標記待複習</span>` : ""}
-          <span class="badge">第 ${ui.index + 1} / ${total || 1} 張</span>
+          <span class="badge badge-accent">${escapeHtml(item.levelCategory)}・${escapeHtml(item.group)}</span>
+          ${isMarked ? `<span class="badge badge-warning">已標記待複習</span>` : ""}
+          <span class="checklist-detail">第 ${ui.index + 1} / ${total || 1} 張・${escapeHtml(item.reviewStatus)}</span>
         </div>
 
         <div class="flashcard-header">
@@ -218,11 +216,11 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           ui.mode === "active-recall" && ui.contextFirst && !ui.revealed
             ? `
           <div class="example-box">
-            <div class="pill pill-green" style="margin-bottom: 6px;">i+1 語境提示</div>
-            <div lang="ja">${renderRubyText(item.exampleJa)}</div>
+            <p class="filter-label">i+1 語境提示</p>
+            <div class="example-ja" lang="ja">${renderRubyText(item.exampleJa)}</div>
             <div class="btn-row">
               <button
-                class="btn btn-pill-sm"
+                class="btn btn-sm"
                 type="button"
                 data-speak-ja="${escapeHtml(plainExample)}"
                 ${speechAvailable ? "" : "disabled"}
@@ -238,7 +236,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
 
         <div class="btn-row">
           <button
-            class="btn"
+            class="btn btn-sm"
             type="button"
             data-speak-ja="${escapeHtml(item.kana)}"
             ${speechAvailable ? "" : "disabled"}
@@ -247,24 +245,25 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             <span>朗讀單字</span>
           </button>
           <button
-            class="btn ${isMarked ? "btn-warning" : ""}"
+            class="btn btn-sm ${isMarked ? "btn-active" : ""}"
             type="button"
             id="vocab-mark-review-btn"
+            aria-pressed="${isMarked}"
           >
             ${LUCIDE_ICONS.bookmark}
-            <span>${isMarked ? "已標記待複習（點擊取消）" : "標記為待複習"}</span>
+            <span>${isMarked ? "已標記（取消）" : "標記待複習"}</span>
           </button>
         </div>
 
         <p class="flashcard-meta">
-          目前熟悉度：<strong>${escapeHtml(famLabel)}</strong>｜下次複習日：<strong>${escapeHtml(nextDateText)}</strong>
+          熟悉度：<strong>${escapeHtml(famLabel)}</strong>｜下次複習：<strong>${escapeHtml(nextDateText)}</strong>
         </p>
 
         ${
           ui.mode === "quiz"
             ? `
           <div class="card-divider">
-            <p class="filter-label" style="margin: 0 0 8px;">請選出正確的中文意思：</p>
+            <p class="filter-label">請選出正確的中文意思：</p>
             <div class="option-list" role="radiogroup" aria-label="單字中文選項">
               ${ui.choiceOptions
                 .map((opt, idx) => {
@@ -288,16 +287,16 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
 
             <div class="btn-row">
               <button
-                class="btn btn-primary"
+                class="btn ${ui.choiceSubmitted ? "" : "btn-primary"}"
                 type="button"
                 id="vocab-check-choice-btn"
                 ${ui.choiceSubmitted || !ui.selectedChoiceId ? "disabled" : ""}
               >
-                ${ui.choiceSubmitted ? "已完成評估" : "確認答案並完成此字"}
+                ${ui.choiceSubmitted ? "已完成評估" : "確認答案"}
               </button>
               ${
                 ui.choiceSubmitted
-                  ? `<button class="btn btn-blue" type="button" id="vocab-next-btn">繼續下一個</button>`
+                  ? `<button class="btn btn-primary" type="button" id="vocab-next-btn">繼續下一個</button>`
                   : ""
               }
             </div>
@@ -305,13 +304,13 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             ${
               ui.choiceSubmitted
                 ? `
-              <div class="notice-box ${isCorrectChoice ? "notice-success" : "notice-danger"}" style="margin-top: 14px;">
+              <div class="notice-box ${isCorrectChoice ? "notice-success" : "notice-danger"} mt-3">
                 ${isCorrectChoice ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
                 <div class="notice-content">
-                  <strong>${isCorrectChoice ? "答對了！已標記「有點熟」（3 天後複習）" : "答錯了，已標記「不熟」（1 天後複習）"}</strong><br />
-                  <span>讀音：<strong lang="ja">${escapeHtml(item.kana)}${ui.showKatakana ? `（${escapeHtml(katakanaReading)}）` : ""}</strong>｜正解：<strong>${escapeHtml(item.meaning)}</strong>（${escapeHtml(item.pos)}）</span>
-                  <div class="example-box" style="margin-top: 8px;">
-                    <div lang="ja">${renderRubyText(item.exampleJa)}</div>
+                  <strong>${isCorrectChoice ? "答對，已排定 3 天後複習（有點熟）" : "答錯，已排定 1 天後複習（不熟）"}</strong>
+                  <div class="mt-2">讀音：<strong lang="ja">${escapeHtml(item.kana)}${ui.showKatakana ? `（${escapeHtml(katakanaReading)}）` : ""}</strong>｜正解：<strong>${escapeHtml(item.meaning)}</strong>（${escapeHtml(item.pos)}）</div>
+                  <div class="example-box mt-2">
+                    <div class="example-ja" lang="ja">${renderRubyText(item.exampleJa)}</div>
                     <div class="example-zh">${escapeHtml(item.exampleZh)}</div>
                   </div>
                 </div>
@@ -324,7 +323,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             : !ui.revealed
               ? `
           <div class="btn-row">
-            <button class="btn btn-primary" type="button" id="vocab-reveal-btn">顯示答案（再選擇熟悉度完成）</button>
+            <button class="btn btn-primary" type="button" id="vocab-reveal-btn">顯示答案</button>
           </div>
         `
               : `
@@ -335,11 +334,11 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
             <p class="flashcard-meaning">${escapeHtml(item.meaning)}</p>
             <p class="flashcard-meta">詞性：${escapeHtml(item.pos)}</p>
             <div class="example-box">
-              <div lang="ja"><strong>例句：</strong>${renderRubyText(item.exampleJa)}</div>
+              <div class="example-ja" lang="ja"><strong>例句：</strong>${renderRubyText(item.exampleJa)}</div>
               <div class="example-zh">翻譯：${escapeHtml(item.exampleZh)}</div>
               <div class="btn-row">
                 <button
-                  class="btn btn-pill-sm"
+                  class="btn btn-sm"
                   type="button"
                   data-speak-ja="${escapeHtml(plainExample)}"
                   ${speechAvailable ? "" : "disabled"}
@@ -350,16 +349,16 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
               </div>
             </div>
 
-            <p class="flashcard-meta">點選下方任一熟悉度即完成此卡並排定下次複習日（翻面不會自動計為熟悉）：</p>
+            <p class="flashcard-meta">點選熟悉度完成此卡並排定下次複習日（翻面不會自動計分）：</p>
             <div class="btn-row">
               <button class="btn btn-danger" type="button" data-rate="unfamiliar">
-                不熟（${STUDY_CONFIG.reviewIntervalsDays.unfamiliar} 天後複習）
+                不熟・${STUDY_CONFIG.reviewIntervalsDays.unfamiliar} 天
               </button>
               <button class="btn btn-warning" type="button" data-rate="somewhat">
-                有點熟（${STUDY_CONFIG.reviewIntervalsDays.somewhat} 天後複習）
+                有點熟・${STUDY_CONFIG.reviewIntervalsDays.somewhat} 天
               </button>
-              <button class="btn btn-success" type="button" data-rate="familiar">
-                熟悉（${STUDY_CONFIG.reviewIntervalsDays.familiar} 天後複習）
+              <button class="btn btn-correct" type="button" data-rate="familiar">
+                熟悉・${STUDY_CONFIG.reviewIntervalsDays.familiar} 天
               </button>
             </div>
           </div>

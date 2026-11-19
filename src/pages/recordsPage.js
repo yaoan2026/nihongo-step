@@ -50,11 +50,11 @@ export function renderRecordsPage(container, { state, updateState }) {
 
     container.innerHTML = `
       <div class="page-header">
-        <h2 class="page-title">學習紀錄與設定</h2>
+        <h1 class="page-title">學習紀錄與設定</h1>
         <p class="page-desc">管理本機瀏覽器學習進度、Gemini AI 設定與 JSON 備份還原。</p>
       </div>
 
-      <section class="notice-box notice-warning" style="margin-bottom: 16px;">
+      <section class="notice-box notice-warning mb-3">
         ${LUCIDE_ICONS.alertTriangle}
         <div class="notice-content">
           <strong>本機資料保存提醒：</strong>${escapeHtml(STUDY_CONFIG.disclaimer.storageNotice)}
@@ -62,9 +62,9 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
-        <h3 class="section-heading">目前學習統計</h3>
+        <h2 class="section-heading">學習統計</h2>
         <div class="stat-tiles">
-          <div class="stat-tile tile-yellow">
+          <div class="stat-tile is-accent">
             <div class="stat-tile-value">${vocabAssessed}/${VOCAB_LIST.length}</div>
             <div class="stat-tile-label">單字已評估</div>
           </div>
@@ -81,43 +81,45 @@ export function renderRecordsPage(container, { state, updateState }) {
             <div class="stat-tile-label">測驗正確率</div>
           </div>
         </div>
-        <p class="flashcard-meta" style="margin-top: 12px;">
-          累計作答：答對 ${totalCorrect} / ${totalAnswered} 題｜錯題本紀錄：${wrongCount} 題
+        <p class="flashcard-meta mt-3">
+          累計作答：${totalCorrect} / ${totalAnswered} 題｜錯題本：${wrongCount} 題
         </p>
       </section>
 
-      <section class="card card-blush">
-        <h3 class="section-heading">Gemini AI 模式設定</h3>
+      <section class="card card-subtle">
+        <h2 class="section-heading">Gemini AI 設定</h2>
         <p class="page-desc">
-          填入您的 Gemini API Key 後，即可在「練習」與「文法」使用 <strong>AI 每日全新 10 題</strong>、<strong>AI 老師詳細解析</strong> 與 <strong>AI 造句批改</strong>。API Key 僅保存於此瀏覽器，不會上傳到 GitHub，也不會匯出到備份 JSON。
+          填入個人 Gemini API Key 後，即可在「練習」與「文法」頁使用 AI 出題、題目解析與造句確認。API Key 僅保存於目前瀏覽器，不會包含於匯出的 JSON 備份檔中。
         </p>
 
-        <div class="stack">
+        <div class="stack mt-3">
           <div>
-            <label class="filter-label" for="gemini-key-input">Gemini API Key（目前狀態：${savedKey ? "已設定" : "尚未設定"}）</label>
+            <label class="filter-label" for="gemini-key-input">Gemini API Key（狀態：${savedKey ? "已設定" : "未設定"}）</label>
             <input
               type="password"
               id="gemini-key-input"
-              placeholder="貼上您的 AIza... API Key"
+              class="mt-2"
+              placeholder="貼上 AIza... API Key"
               value="${escapeHtml(savedKey)}"
               autocomplete="off"
-              style="margin-top: 6px;"
             />
           </div>
 
-          <div class="filter-group">
+          <div>
             <label class="filter-label" for="gemini-model-select">模型選擇</label>
-            <select id="gemini-model-select">
-              ${modelOptions
-                .map(
-                  (m) =>
-                    `<option value="${escapeHtml(m)}" ${savedModel === m ? "selected" : ""}>${escapeHtml(m)}${m === DEFAULT_GEMINI_MODEL ? "（推薦預設）" : ""}</option>`
-                )
-                .join("")}
-            </select>
-            <button class="btn" type="button" id="detect-models-btn" ${ui.aiDetecting ? "disabled" : ""}>
-              ${ui.aiDetecting ? "偵測中…" : "自動偵測可用模型"}
-            </button>
+            <div class="filter-group mt-2">
+              <select id="gemini-model-select">
+                ${modelOptions
+                  .map(
+                    (m) =>
+                      `<option value="${escapeHtml(m)}" ${savedModel === m ? "selected" : ""}>${escapeHtml(m)}${m === DEFAULT_GEMINI_MODEL ? "（預設）" : ""}</option>`
+                  )
+                  .join("")}
+              </select>
+              <button class="btn" type="button" id="detect-models-btn" ${ui.aiDetecting ? "disabled" : ""}>
+                ${ui.aiDetecting ? "偵測中…" : "自動偵測可用模型"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -129,7 +131,7 @@ export function renderRecordsPage(container, { state, updateState }) {
         ${
           ui.aiErrorMessage
             ? `
-          <div class="notice-box notice-danger" style="margin-top: 12px;">
+          <div class="notice-box notice-danger mt-3">
             ${LUCIDE_ICONS.x}
             <div class="notice-content">${escapeHtml(ui.aiErrorMessage)}</div>
           </div>
@@ -140,7 +142,7 @@ export function renderRecordsPage(container, { state, updateState }) {
         ${
           ui.aiStatusMessage
             ? `
-          <div class="notice-box notice-success" style="margin-top: 12px;">
+          <div class="notice-box notice-success mt-3">
             ${LUCIDE_ICONS.check}
             <div class="notice-content"><strong>${escapeHtml(ui.aiStatusMessage)}</strong></div>
           </div>
@@ -150,22 +152,22 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
-        <h3 class="section-heading">JSON 匯出與匯入</h3>
-        <p class="page-desc">匯入時會先檢查 JSON 格式與版本（目前支援 v${STUDY_CONFIG.schemaVersion}），驗證通過並經您確認後才會寫入；若檔案損壞，原紀錄不會受到影響。</p>
+        <h2 class="section-heading">JSON 匯出與匯入</h2>
+        <p class="page-desc">匯入時會驗證 JSON 格式與版本（目前支援 v${STUDY_CONFIG.schemaVersion}），經確認後才會寫入；若格式不符，原有紀錄不受影響。</p>
 
         <div class="btn-row">
-          <button class="btn btn-primary" type="button" id="export-json-btn">匯出 JSON 備份</button>
+          <button class="btn ${ui.importPreview ? "" : "btn-primary"}" type="button" id="export-json-btn">匯出 JSON 備份</button>
         </div>
 
         <div class="card-divider">
-          <label class="filter-label" for="import-json-input">選擇要匯入的 JSON 備份檔：</label><br />
-          <input type="file" id="import-json-input" accept=".json,application/json" style="margin-top: 8px;" />
+          <label class="filter-label" for="import-json-input">選擇要匯入的 JSON 備份檔</label>
+          <input type="file" id="import-json-input" accept=".json,application/json" class="mt-2" />
         </div>
 
         ${
           ui.importError
             ? `
-          <div class="notice-box notice-danger" style="margin-top: 12px;">
+          <div class="notice-box notice-danger mt-3">
             ${LUCIDE_ICONS.x}
             <div class="notice-content"><strong>匯入失敗：</strong>${escapeHtml(ui.importError)}</div>
           </div>
@@ -176,12 +178,12 @@ export function renderRecordsPage(container, { state, updateState }) {
         ${
           ui.importPreview
             ? `
-          <div class="notice-box notice-warning" style="margin-top: 12px;">
+          <div class="notice-box notice-warning mt-3">
             ${LUCIDE_ICONS.alertTriangle}
             <div class="notice-content">
-              <strong>請確認是否覆蓋目前紀錄：</strong><br />
+              <strong>確認覆蓋目前紀錄：</strong><br />
               備份時間：${escapeHtml(ui.importPreview.summary.exportedAt)}<br />
-              單字紀錄：${ui.importPreview.summary.vocabCount} 筆｜已讀文法：${ui.importPreview.summary.grammarReadCount} 篇｜累計作答：${ui.importPreview.summary.totalAnswered} 題｜錯題紀錄：${ui.importPreview.summary.wrongBookCount} 題
+              單字：${ui.importPreview.summary.vocabCount} 筆｜已讀文法：${ui.importPreview.summary.grammarReadCount} 篇｜作答：${ui.importPreview.summary.totalAnswered} 題｜錯題：${ui.importPreview.summary.wrongBookCount} 題
               <div class="btn-row">
                 <button class="btn btn-primary" type="button" id="confirm-import-btn">確認匯入並覆蓋</button>
                 <button class="btn" type="button" id="cancel-import-btn">取消</button>
@@ -195,7 +197,7 @@ export function renderRecordsPage(container, { state, updateState }) {
         ${
           ui.statusMessage
             ? `
-          <div class="notice-box notice-success" style="margin-top: 12px;">
+          <div class="notice-box notice-success mt-3">
             ${LUCIDE_ICONS.check}
             <div class="notice-content"><strong>${escapeHtml(ui.statusMessage)}</strong></div>
           </div>
@@ -205,13 +207,13 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
-        <h3 class="section-heading">全部作答歷史紀錄（永久保存於此瀏覽器）</h3>
-        <p class="page-desc">每次作答皆會跨日保留（最近保留最多 200 筆）。</p>
+        <h2 class="section-heading">作答歷史紀錄</h2>
+        <p class="page-desc">跨日保留於目前瀏覽器（最多保留 200 筆，顯示最新 20 筆）。</p>
         ${
           !state.quizHistory || state.quizHistory.length === 0
-            ? `<p class="page-desc">目前尚無作答紀錄。</p>`
+            ? `<p class="page-desc mt-2">目前尚無作答紀錄。</p>`
             : `
-          <div class="stack">
+          <div class="stack mt-3">
             ${state.quizHistory
               .slice(0, 20)
               .map((h) => {
@@ -219,13 +221,12 @@ export function renderRecordsPage(container, { state, updateState }) {
                   ? new Date(h.answeredAt).toLocaleString("zh-TW", { hour12: false })
                   : "未知";
                 return `
-                  <div class="example-box ${h.isCorrect ? "highlight-row-green" : ""}">
+                  <div class="entry-item ${h.isCorrect ? "is-correct" : ""}">
                     <div class="badge-row">
-                      <span class="badge">${escapeHtml(h.questionId)}</span>
-                      <span class="badge ${h.isCorrect ? "pill-green" : "pill-coral"}">
+                      <span class="badge ${h.isCorrect ? "badge-correct" : "badge-incorrect"}">
                         ${h.isCorrect ? `${LUCIDE_ICONS.check}<span>答對</span>` : `${LUCIDE_ICONS.x}<span>答錯</span>`}
                       </span>
-                      <span class="badge">${escapeHtml(timeText)}</span>
+                      <span class="flashcard-meta mt-0">${escapeHtml(h.questionId)}・${escapeHtml(timeText)}</span>
                     </div>
                     <div class="flashcard-meta">選擇：<span lang="ja">${renderRubyText(h.selectedOptionText)}</span></div>
                   </div>
@@ -238,14 +239,14 @@ export function renderRecordsPage(container, { state, updateState }) {
       </section>
 
       <section class="card">
-        <h3 class="section-heading" style="color: var(--coral-text);">重設學習紀錄</h3>
-        <p class="page-desc">將清除目前瀏覽器內所有的單字進度、文法閱讀與造句筆記、練習統計與錯題本。</p>
+        <h2 class="section-heading text-danger">重設學習紀錄</h2>
+        <p class="page-desc">清除目前瀏覽器內所有的單字進度、文法閱讀與筆記、練習統計與錯題本。</p>
 
         ${
           !ui.confirmReset
-            ? `<div class="btn-row"><button class="btn btn-danger" type="button" id="ask-reset-btn">重設所有學習紀錄</button></div>`
+            ? `<div class="btn-row"><button class="btn" type="button" id="ask-reset-btn">重設所有學習紀錄</button></div>`
             : `
-          <div class="notice-box notice-danger" style="margin-top: 12px;">
+          <div class="notice-box notice-danger mt-3">
             ${LUCIDE_ICONS.alertTriangle}
             <div class="notice-content">
               <strong>確定要清空所有學習紀錄嗎？此動作無法復原。</strong>
