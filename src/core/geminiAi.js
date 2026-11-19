@@ -1,4 +1,5 @@
 import { stripRubyMarkup } from "./dom.js";
+import { normalizeGrammarTitleKey } from "./studyLogic.js";
 
 const API_KEY_STORAGE_KEY = "nihongo_step_gemini_api_key";
 const MODEL_STORAGE_KEY = "nihongo_step_gemini_model";
@@ -425,4 +426,157 @@ export async function generateAiVocab({
   const existingIds = (Array.isArray(existingList) ? existingList : []).map((v) => v?.id).filter(Boolean);
   const existingWords = (Array.isArray(existingList) ? existingList : []).map((v) => v?.word).filter(Boolean);
   return validateAiVocabList(parsed, dateStr, existingIds, existingWords);
+}
+
+export function validateAiGrammarList(
+  rawList,
+  dateStr,
+  existingIds = [],
+  existingTitles = []
+) {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    throw new Error("AI 回傳的文法格式不正確（非陣列或為空）。");
+  }
+
+  const usedIds = new Set(Array.isArray(existingIds) ? existingIds : []);
+  const usedTitles = new Set(
+    (Array.isArray(existingTitles) ? existingTitles : [])
+      .map((t) => normalizeGrammarTitleKey(stripRubyMarkup(String(t || "")).replace(/[{}]/g, "")))
+      .filter(Boolean)
+  );
+
+  const normalized = [];
+  let seq = 1;
+
+  for (let i = 0; i < rawList.length; i += 1) {
+    const item = rawList[i];
+    if (!item || typeof item !== "object") continue;
+
+    const title = stripRubyMarkup(String(item.title || "")).replace(/[{}]/g, "").trim();
+    const titleKey = normalizeGrammarTitleKey(title);
+    const meaning = String(item.meaning || "").trim();
+    if (!title || !titleKey || !meaning) continue;
+    if (usedTitles.has(titleKey)) continue;
+
+    const examples = (Array.isArray(item.examples) ? item.examples : [])
+      .filter(
+        (ex) =>
+          ex &&
+          typeof ex === "object" &&
+          typeof ex.ja === "string" &&
+          ex.ja.trim() &&
+          typeof ex.zh === "string" &&
+          ex.zh.trim()
+      )
+      .slice(0, 3)
+      .map((ex) => ({
+        ja: ex.ja.trim(),
+        zh: ex.zh.trim()
+      }));
+    if (examples.length === 0) continue;
+
+    let id = `ai_gram_${dateStr}_${String(seq).padStart(2, "0")}`;
+    while (usedIds.has(id)) {
+      seq += 1;
+      id = `ai_gram_${dateStr}_${String(seq).padStart(2, "0")}`;
+    }
+    usedIds.add(id);
+    usedTitles.add(titleKey);
+    seq += 1;
+
+    const connection = String(item.connection || "").trim() || "請參考例句接續方式";
+    const situation = String(item.situation || "").trim() || "日常生活與職場常用表達。";
+    const notes = String(item.notes || "").trim() || "建議搭配例句多加朗讀與造句練習。";
+
+    normalized.push({
+      id,
+      levelCategory: item.levelCategory === "N3" ? "N3" : "N4",
+      title,
+      meaning,
+      connection,
+      situation,
+      examples,
+      notes,
+      source: "Gemini AI 即時生成",
+      contentVersion: dateStr,
+      reviewStatus: "AI 即時生成（建議自行核對）"
+    });
+  }
+
+  if (normalized.length === 0) {
+    throw new Error("無法解析出新的不重複文法，請稍後再試一次。");
+  }
+  return normalized;
+}
+
+export async function generateAiGrammar({
+  apiKey,
+  model = DEFAULT_GEMINI_MODEL,
+  dateStr,
+  existingList = [],
+  count = 2,
+  levelFocus = "mixed",
+  topic = ""
+}) {
+  const safeCount = Math.max(1, Math.min(5, Number(count) || 2));
+  const recentTitles = (Array.isArray(existingList) ? existingList : [])
+    .slice(-60)
+    .map((g) => g?.title)
+    .filter(Boolean);
+
+  const levelInstruction =
+    levelFocus === "N4"
+      ? '全部為 JLPT N4 程度文法（levelCategory 全填 "N4"）。'
+      : levelFocus === "N3"
+        ? '全部為 JLPT N3 程度文法（levelCategory 全填 "N3"）。'
+        : "混合 JLPT N4 與 N3 實用文法（盡量平均分配）。";
+
+  const topicInstruction = String(topic || "").trim()
+    ? `主題／語氣方向：請圍繞「${String(topic).trim()}」相關情境挑選句型。`
+    : "主題／語氣方向：時間表現、條件推論、敬語／謙讓、口語接續或原因結果表達。";
+
+  const prompt = `
+你是一位專業的繁體中文日語教師。請為目前程度約 JLPT N4、目標往 N3 學習的台灣學生，編寫 ${safeCount} 篇實用的全新日文文法筆記。
+
+嚴格要求：
+1. ${levelInstruction}
+2. ${topicInstruction}
+3. 不得與以下已有文法重複：${recentTitles.length > 0 ? recentTitles.join("、") : "（無）"}
+4. title 欄位請寫乾淨純句型（不要包含 {|} 標記，例如「～おかげで」、「～てばかりいる」）。
+5. 每篇文法請提供 2 句自然實用的 N4～N3 例句（examples 陣列），且每句例句的 ja 中所有漢字都必須用 {漢字|かんじ} 標註平假名讀音（例如：{明日|あした}、{電車|でんしゃ}）。
+6. meaning、connection、situation、notes 與每句例句的 zh 都必須使用繁體中文（台灣慣用語）。
+7. 只回傳 JSON 陣列，格式如下：
+[
+  {
+    "levelCategory": "N3",
+    "title": "～おかげで",
+    "meaning": "託～的福／多虧了～",
+    "connection": "動詞・い形容詞普通形／な形容詞＋な／名詞＋の ＋ おかげで",
+    "situation": "用於對正面、令人感謝的結果表達原因。",
+    "examples": [
+      {
+        "ja": "{先生|せんせい}のおかげで、{日本語|にほんご}が{上手|じょうず}になりました。",
+        "zh": "託老師的福，日文變好了。"
+      },
+      {
+        "ja": "{早|はや}く{起|お}きたおかげで、{電車|でんしゃ}に{間|ま}に{合|あ}いました。",
+        "zh": "多虧早起，趕上了電車。"
+      }
+    ],
+    "notes": "多用於帶來正面結果時，若是不好的結果則常用「～せいで」。"
+  }
+]
+`;
+
+  const rawText = await callGemini({ apiKey, model, prompt, jsonMode: true });
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
+  }
+
+  const existingIds = (Array.isArray(existingList) ? existingList : []).map((g) => g?.id).filter(Boolean);
+  const existingTitles = (Array.isArray(existingList) ? existingList : []).map((g) => g?.title).filter(Boolean);
+  return validateAiGrammarList(parsed, dateStr, existingIds, existingTitles);
 }

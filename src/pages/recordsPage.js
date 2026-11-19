@@ -7,7 +7,7 @@ import {
   applyImportedState,
   resetState
 } from "../core/storage.js";
-import { getAllVocabList, getLocalDateString } from "../core/studyLogic.js";
+import { getAllGrammarList, getAllVocabList, getLocalDateString } from "../core/studyLogic.js";
 import { escapeHtml, renderRubyText } from "../core/dom.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 import {
@@ -34,11 +34,12 @@ export function renderRecordsPage(container, { state, updateState }) {
 
   function render() {
     const allVocab = getAllVocabList(VOCAB_LIST, state.aiVocabList);
+    const allGrammar = getAllGrammarList(GRAMMAR_LIST, state.aiGrammarList);
     const vocabAssessed = allVocab.filter((v) => Boolean(state.vocabProgress?.[v.id])).length;
     const vocabFamiliar = allVocab.filter(
       (v) => state.vocabProgress?.[v.id]?.familiarity === "familiar"
     ).length;
-    const grammarRead = Object.values(state.grammarProgress || {}).filter((g) => g?.isRead).length;
+    const grammarRead = allGrammar.filter((g) => Boolean(state.grammarProgress?.[g.id]?.isRead)).length;
     const totalAnswered = state.quizStats?.totalAnswered || 0;
     const totalCorrect = state.quizStats?.totalCorrect || 0;
     const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
@@ -74,7 +75,7 @@ export function renderRecordsPage(container, { state, updateState }) {
             <div class="stat-tile-label">熟悉單字</div>
           </div>
           <div class="stat-tile">
-            <div class="stat-tile-value">${grammarRead}/${GRAMMAR_LIST.length}</div>
+            <div class="stat-tile-value">${grammarRead}/${allGrammar.length}</div>
             <div class="stat-tile-label">文法已讀</div>
           </div>
           <div class="stat-tile">
@@ -90,7 +91,7 @@ export function renderRecordsPage(container, { state, updateState }) {
       <section class="card card-subtle">
         <h2 class="section-heading">Gemini AI 設定</h2>
         <p class="page-desc">
-          填入個人 Gemini API Key 後，即可在「練習」與「文法」頁使用 AI 出題、題目解析與造句確認。API Key 僅保存於目前瀏覽器，不會包含於匯出的 JSON 備份檔中。
+          填入個人 Gemini API Key 後，即可在「單字」、「文法」與「練習」頁使用每日自動更新、手動 AI 生成與題目解析／造句批改。API Key 僅保存於目前瀏覽器，不會包含於匯出的 JSON 備份檔中。
         </p>
 
         <div class="stack mt-3">

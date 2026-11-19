@@ -20,13 +20,15 @@ import {
   setGrammarNote,
   computeStudyReadiness,
   getAllVocabList,
-  mergeAiVocabList
+  mergeAiVocabList,
+  getAllGrammarList,
+  mergeAiGrammarList
 } from "../src/core/studyLogic.js";
 import {
   renderRubyText,
   stripRubyMarkup
 } from "../src/core/dom.js";
-import { validateAiQuizList, validateAiVocabList } from "../src/core/geminiAi.js";
+import { validateAiQuizList, validateAiVocabList, validateAiGrammarList } from "../src/core/geminiAi.js";
 import { TOWER_LEVELS, TOWER_QUESTION_BANK } from "../src/data/towerQuestions.js";
 import {
   computeTowerResult,
@@ -327,6 +329,8 @@ test("文法造句筆記設定與舊版備份相容匯入", () => {
   assert.deepEqual(legacyCheck.data.grammarNotes, {});
   assert.deepEqual(legacyCheck.data.aiVocabList, []);
   assert.equal(legacyCheck.data.lastDailyVocabDate, null);
+  assert.deepEqual(legacyCheck.data.aiGrammarList, []);
+  assert.equal(legacyCheck.data.lastDailyGrammarDate, null);
 });
 
 test("AI 單字驗證、去重與合併儲存正確", () => {
@@ -450,4 +454,76 @@ test("爬塔題庫 200 題完整性與選項打亂後正確索引檢查", () => 
   assert.equal(resClear.reachedLevel, "N1");
   assert.equal(resClear.clearedLabel, "N1");
   assert.equal(resClear.isAllCleared, true);
+});
+
+test("AI 文法驗證、去重與合併儲存正確", () => {
+  const sample = [
+    {
+      levelCategory: "N3",
+      title: "～{おかげ|おかげ}で",
+      meaning: "託～的福／多虧了～",
+      connection: "普通形 ＋ おかげで",
+      situation: "用於表達正面結果的原因。",
+      examples: [
+        {
+          ja: "{先生|せんせい}のおかげで、{合格|ごうかく}できました。",
+          zh: "多虧老師幫忙，順利及格了。"
+        },
+        {
+          ja: "",
+          zh: "應被過濾的無效例句"
+        }
+      ],
+      notes: "正面結果用「～おかげで」。"
+    },
+    {
+      levelCategory: "N4",
+      title: "~てみる",
+      meaning: "試著做～",
+      connection: "動詞て形 ＋ みる",
+      situation: "重複波浪號測試",
+      examples: [{ ja: "{食|た}べてみます。", zh: "吃看看。" }],
+      notes: "應與 ～てみる 判為重複。"
+    },
+    {
+      levelCategory: "N3",
+      title: "～せいで",
+      meaning: "都是因為～",
+      connection: "普通形 ＋ せいで",
+      situation: "無有效例句應被跳過",
+      examples: [{ ja: "invalid only", zh: "" }],
+      notes: ""
+    }
+  ];
+
+  const validated = validateAiGrammarList(
+    sample,
+    "2026-11-19",
+    ["ai_gram_2026-11-19_01"],
+    ["～てみる"]
+  );
+  assert.equal(validated.length, 1);
+  assert.equal(validated[0].id, "ai_gram_2026-11-19_02");
+  assert.equal(validated[0].title, "～おかげで");
+  assert.equal(validated[0].examples.length, 1);
+  assert.throws(() => validateAiGrammarList([], "2026-11-19"));
+
+  const mergedRes = mergeAiGrammarList([], validated, GRAMMAR_LIST);
+  assert.equal(mergedRes.addedCount, 1);
+  const duplicateRes = mergeAiGrammarList(mergedRes.merged, validated, GRAMMAR_LIST);
+  assert.equal(duplicateRes.addedCount, 0);
+
+  const combined = getAllGrammarList(GRAMMAR_LIST, mergedRes.merged);
+  assert.equal(combined.length, GRAMMAR_LIST.length + 1);
+
+  const exported = exportStateJson({
+    ...createDefaultState(),
+    aiGrammarList: mergedRes.merged,
+    lastDailyGrammarDate: "2026-11-19"
+  });
+  const imported = validateImportPayload(exported);
+  assert.equal(imported.ok, true);
+  assert.equal(imported.data.aiGrammarList.length, 1);
+  assert.equal(imported.data.aiGrammarList[0].examples.length, 1);
+  assert.equal(imported.data.lastDailyGrammarDate, "2026-11-19");
 });

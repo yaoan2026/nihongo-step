@@ -14,7 +14,9 @@ export function createDefaultState() {
     reviewMarks: { vocab: {}, quiz: {} },
     grammarNotes: {},
     aiVocabList: [],
-    lastDailyVocabDate: null
+    lastDailyVocabDate: null,
+    aiGrammarList: [],
+    lastDailyGrammarDate: null
   };
 }
 
@@ -72,7 +74,10 @@ export function exportStateJson(state, nowIso = new Date().toISOString()) {
     reviewMarks: state.reviewMarks || { vocab: {}, quiz: {} },
     grammarNotes: isPlainObject(state.grammarNotes) ? state.grammarNotes : {},
     aiVocabList: Array.isArray(state.aiVocabList) ? state.aiVocabList : [],
-    lastDailyVocabDate: typeof state.lastDailyVocabDate === "string" ? state.lastDailyVocabDate : null
+    lastDailyVocabDate: typeof state.lastDailyVocabDate === "string" ? state.lastDailyVocabDate : null,
+    aiGrammarList: Array.isArray(state.aiGrammarList) ? state.aiGrammarList : [],
+    lastDailyGrammarDate:
+      typeof state.lastDailyGrammarDate === "string" ? state.lastDailyGrammarDate : null
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -147,7 +152,48 @@ export function validateImportPayload(rawText, expectedSchemaVersion = STUDY_CON
         )
       : [],
     lastDailyVocabDate:
-      typeof parsed.lastDailyVocabDate === "string" ? parsed.lastDailyVocabDate : null
+      typeof parsed.lastDailyVocabDate === "string" ? parsed.lastDailyVocabDate : null,
+    aiGrammarList: Array.isArray(parsed.aiGrammarList)
+      ? parsed.aiGrammarList
+          .filter(
+            (g) =>
+              isPlainObject(g) &&
+              typeof g.id === "string" &&
+              g.id.trim() &&
+              typeof g.title === "string" &&
+              g.title.trim() &&
+              typeof g.meaning === "string" &&
+              g.meaning.trim()
+          )
+          .map((g) => ({
+            ...g,
+            id: g.id.trim(),
+            levelCategory: g.levelCategory === "N3" ? "N3" : "N4",
+            title: g.title.trim(),
+            meaning: g.meaning.trim(),
+            connection: typeof g.connection === "string" ? g.connection.trim() : "",
+            situation: typeof g.situation === "string" ? g.situation.trim() : "",
+            notes: typeof g.notes === "string" ? g.notes.trim() : "",
+            reviewStatus:
+              typeof g.reviewStatus === "string" && g.reviewStatus.trim()
+                ? g.reviewStatus.trim()
+                : "AI 即時生成（建議自行核對）",
+            examples: Array.isArray(g.examples)
+              ? g.examples
+                  .filter(
+                    (ex) =>
+                      isPlainObject(ex) &&
+                      typeof ex.ja === "string" &&
+                      ex.ja.trim() &&
+                      typeof ex.zh === "string" &&
+                      ex.zh.trim()
+                  )
+                  .map((ex) => ({ ja: ex.ja.trim(), zh: ex.zh.trim() }))
+              : []
+          }))
+      : [],
+    lastDailyGrammarDate:
+      typeof parsed.lastDailyGrammarDate === "string" ? parsed.lastDailyGrammarDate : null
   };
 
   const summary = {

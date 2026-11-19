@@ -4,6 +4,7 @@ import { GRAMMAR_LIST } from "../data/grammar.js";
 import { QUIZ_LIST } from "../data/quizzes.js";
 import {
   computeStudyReadiness,
+  getAllGrammarList,
   getAllVocabList,
   getJapanTimeString,
   getLocalDateString
@@ -48,10 +49,11 @@ export function renderTodayPage(container, { state, navigate }) {
   const today = getLocalDateString();
   const japanTime = getJapanTimeString();
   const allVocab = getAllVocabList(VOCAB_LIST, state.aiVocabList);
+  const allGrammar = getAllGrammarList(GRAMMAR_LIST, state.aiGrammarList);
   const stats = computeStudyReadiness({
     state,
     vocabList: allVocab,
-    grammarList: GRAMMAR_LIST,
+    grammarList: allGrammar,
     quizList: QUIZ_LIST,
     todayStr: today
   });
@@ -106,8 +108,8 @@ export function renderTodayPage(container, { state, navigate }) {
       label: "閱讀並練習 N4→N3 文法例句",
       detail:
         stats.unreadGrammarCount === 0
-          ? `${GRAMMAR_LIST.length} 篇文法已全數閱讀`
-          : `已讀 ${stats.readGrammarCount} / ${GRAMMAR_LIST.length} 篇`,
+          ? `${allGrammar.length} 篇文法已全數閱讀`
+          : `已讀 ${stats.readGrammarCount} / ${allGrammar.length} 篇`,
       done: stats.unreadGrammarCount === 0
     },
     {

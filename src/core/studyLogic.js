@@ -315,3 +315,43 @@ export function mergeAiVocabList(existingAiVocab = [], incomingAiVocab = [], bas
     addedItems
   };
 }
+
+export function normalizeGrammarTitleKey(title) {
+  return String(title || "").replace(/[~〜～\s　]/g, "").trim();
+}
+
+export function getAllGrammarList(baseGrammarList, aiGrammarList = []) {
+  const seenIds = new Set();
+  const merged = [];
+  for (const item of [...(baseGrammarList || []), ...(Array.isArray(aiGrammarList) ? aiGrammarList : [])]) {
+    if (!item || !item.id || seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+}
+
+export function mergeAiGrammarList(existingAiGrammar = [], incomingAiGrammar = [], baseGrammarList = []) {
+  const existing = Array.isArray(existingAiGrammar) ? existingAiGrammar : [];
+  const base = Array.isArray(baseGrammarList) ? baseGrammarList : [];
+  const seenIds = new Set([...base, ...existing].map((g) => g?.id).filter(Boolean));
+  const seenTitles = new Set(
+    [...base, ...existing].map((g) => normalizeGrammarTitleKey(g?.title)).filter(Boolean)
+  );
+
+  const addedItems = [];
+  for (const item of Array.isArray(incomingAiGrammar) ? incomingAiGrammar : []) {
+    if (!item || !item.id) continue;
+    const normTitle = normalizeGrammarTitleKey(item.title);
+    if (!normTitle || seenIds.has(item.id) || seenTitles.has(normTitle)) continue;
+    seenIds.add(item.id);
+    seenTitles.add(normTitle);
+    addedItems.push(item);
+  }
+
+  return {
+    merged: [...existing, ...addedItems],
+    addedCount: addedItems.length,
+    addedItems
+  };
+}
