@@ -280,14 +280,14 @@ rt {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-1);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
 }
 
 .nav-link {
   text-decoration: none;
   color: var(--ink-muted);
-  padding: 6px 2px;
+  padding: 6px 1px;
   min-height: 44px;
   border-radius: var(--radius-md);
   border: 1.5px solid transparent;
@@ -1298,6 +1298,252 @@ input[type="checkbox"] {
 
 .text-danger {
   color: var(--incorrect-ink);
+}
+
+/* 文法爬塔闖關（Anime Techou 樣式） */
+.tower-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: var(--space-2) auto var(--space-3);
+  max-width: 240px;
+}
+
+.tower-tier {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  padding: 3px 0;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-ink);
+  text-align: center;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.tier-n1 {
+  width: 44%;
+  background: var(--incorrect-bg);
+  color: var(--incorrect-ink);
+}
+
+.tier-n2 {
+  width: 58%;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+}
+
+.tier-n3 {
+  width: 72%;
+  background: var(--accent);
+  color: var(--accent-on);
+}
+
+.tier-n4 {
+  width: 86%;
+  background: var(--sky);
+  color: var(--sky-ink);
+}
+
+.tier-n5 {
+  width: 100%;
+  background: var(--correct-bg);
+  color: var(--correct-ink);
+}
+
+.tower-hud {
+  background: var(--surface);
+  border: 1.5px solid var(--border-ink);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--space-3);
+}
+
+.tower-hud-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.tower-timer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tower-timer-track {
+  flex: 1;
+  min-width: 80px;
+  height: 10px;
+  background: var(--surface-soft);
+  border: 1.5px solid var(--border-ink);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.tower-timer-fill {
+  height: 100%;
+  background: var(--progress-fill);
+  transition: width 100ms linear;
+}
+
+.tower-timer-fill.is-danger {
+  background: var(--incorrect-border);
+}
+
+.tower-timer-num {
+  min-width: 34px;
+  text-align: right;
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.tower-timer-num.is-danger {
+  color: var(--incorrect-ink);
+}
+
+.tower-option-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  min-height: 48px;
+  border: 1.5px solid var(--border-ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ja);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-btn);
+  transition: background-color var(--transition), transform var(--transition);
+}
+
+.tower-option-btn:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.tower-option-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-btn-active);
+}
+
+.tower-option-btn:disabled {
+  cursor: default;
+}
+
+.tower-option-btn.is-correct {
+  background: var(--correct-bg);
+  color: var(--correct-ink);
+}
+
+.tower-option-btn.is-correct .option-key {
+  background: var(--progress-fill);
+  color: var(--correct-ink);
+  border-color: var(--border-ink);
+}
+
+.tower-option-btn.is-wrong {
+  background: var(--incorrect-bg);
+  color: var(--incorrect-ink);
+}
+
+.tower-option-btn.is-wrong .option-key {
+  background: var(--incorrect-border);
+  color: var(--incorrect-ink);
+  border-color: var(--border-ink);
+}
+
+.tower-progress-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.tower-step {
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  text-align: center;
+}
+
+.tower-step.is-cleared {
+  background: var(--correct-bg);
+  border-color: var(--correct-border);
+  color: var(--correct-ink);
+}
+
+.tower-step.is-current {
+  background: var(--accent);
+  border: 1.5px solid var(--border-ink);
+  color: var(--accent-on);
+}
+
+.tower-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(29, 28, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.tower-overlay-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-ink);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+
+.tower-overlay-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+}
+
+.tower-overlay-count {
+  margin-top: var(--space-3);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tower-toast {
+  position: fixed;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  background: var(--accent);
+  color: var(--accent-on);
+  border: 1.5px solid var(--border-ink);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  box-shadow: var(--shadow-btn);
 }
 
 @media (max-width: 600px) {

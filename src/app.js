@@ -5,6 +5,7 @@ import { renderTodayPage } from "./pages/todayPage.js";
 import { renderVocabPage } from "./pages/vocabPage.js";
 import { renderGrammarPage } from "./pages/grammarPage.js";
 import { renderPracticePage } from "./pages/practicePage.js";
+import { renderTowerPage } from "./pages/towerPage.js";
 import { renderRecordsPage } from "./pages/recordsPage.js";
 
 const ROUTES = {
@@ -12,11 +13,13 @@ const ROUTES = {
   vocab: renderVocabPage,
   grammar: renderGrammarPage,
   practice: renderPracticePage,
+  tower: renderTowerPage,
   records: renderRecordsPage
 };
 
 let appState = loadState();
 let pendingParams = {};
+let activeRouteCleanup = null;
 
 function updateState(nextState) {
   appState = nextState;
@@ -53,16 +56,22 @@ function renderCurrentRoute() {
     }
   });
 
+  activeRouteCleanup?.();
+  activeRouteCleanup = null;
+
   const renderFn = ROUTES[route] || renderTodayPage;
   const params = pendingParams;
   pendingParams = {};
 
-  renderFn(root, {
+  const cleanup = renderFn(root, {
     state: appState,
     updateState,
     navigate,
     params
   });
+  if (typeof cleanup === "function") {
+    activeRouteCleanup = cleanup;
+  }
 }
 
 function initThemeToggle() {

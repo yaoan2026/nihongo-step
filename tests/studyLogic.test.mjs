@@ -27,6 +27,14 @@ import {
   stripRubyMarkup
 } from "../src/core/dom.js";
 import { validateAiQuizList, validateAiVocabList } from "../src/core/geminiAi.js";
+import { TOWER_LEVELS, TOWER_QUESTION_BANK } from "../src/data/towerQuestions.js";
+import {
+  computeTowerResult,
+  createEmptySeenMap,
+  drawTowerQuestionsForLevel,
+  getTowerPoolStats,
+  markTowerQuestionSeen
+} from "../src/core/towerLogic.js";
 import {
   createDefaultState,
   exportStateJson,
@@ -374,4 +382,72 @@ test("AI 單字驗證、去重與合併儲存正確", () => {
   assert.equal(imported.ok, true);
   assert.equal(imported.data.aiVocabList.length, 1);
   assert.equal(imported.data.lastDailyVocabDate, "2026-11-19");
+});
+
+test("爬塔題庫 200 題完整性與選項打亂後正確索引檢查", () => {
+  assert.deepEqual(TOWER_LEVELS, ["N5", "N4", "N3", "N2", "N1"]);
+  const allIds = new Set();
+  for (const lvl of TOWER_LEVELS) {
+    assert.equal(TOWER_QUESTION_BANK[lvl].length, 40);
+    for (const q of TOWER_QUESTION_BANK[lvl]) {
+      assert.ok(q.id);
+      assert.equal(allIds.has(q.id), false);
+      allIds.add(q.id);
+      assert.equal(q.options.length, 4);
+      assert.ok(q.ans >= 0 && q.ans < 4);
+    }
+  }
+  assert.equal(allIds.size, 200);
+
+  // 未見題目足夠時抽取 10 題且打亂選項仍對應正確答案文字
+  const emptySeen = createEmptySeenMap(TOWER_LEVELS);
+  const stats0 = getTowerPoolStats(TOWER_QUESTION_BANK, emptySeen, TOWER_LEVELS);
+  assert.equal(stats0.totalQuestions, 200);
+  assert.equal(stats0.remainingUnseen, 200);
+
+  const drawn1 = drawTowerQuestionsForLevel(TOWER_QUESTION_BANK, emptySeen, "N5", 10, () => 0.25);
+  assert.equal(drawn1.questions.length, 10);
+  const origById = new Map(TOWER_QUESTION_BANK.N5.map((q) => [q.id, q]));
+  for (const dq of drawn1.questions) {
+    const orig = origById.get(dq.id);
+    assert.equal(dq.options[dq.ans], orig.options[orig.ans]);
+  }
+
+  // 當 N5 僅剩 3 題未見時，先取完剩餘 3 題再從其餘補齊 10 題且單局不重複
+  let partialSeen = createEmptySeenMap(TOWER_LEVELS);
+  for (const q of TOWER_QUESTION_BANK.N5.slice(0, 37)) {
+    partialSeen = markTowerQuestionSeen(partialSeen, "N5", q.id, TOWER_LEVELS);
+  }
+  const statsPartial = getTowerPoolStats(TOWER_QUESTION_BANK, partialSeen, TOWER_LEVELS);
+  assert.equal(statsPartial.totalSeen, 37);
+  assert.equal(statsPartial.remainingUnseen, 163);
+
+  const drawn2 = drawTowerQuestionsForLevel(TOWER_QUESTION_BANK, partialSeen, "N5", 10, () => 0.42);
+  assert.equal(drawn2.questions.length, 10);
+  const drawn2Ids = new Set(drawn2.questions.map((q) => q.id));
+  assert.equal(drawn2Ids.size, 10);
+  for (const remainingQ of TOWER_QUESTION_BANK.N5.slice(37)) {
+    assert.equal(drawn2Ids.has(remainingQ.id), true);
+  }
+  assert.equal(drawn2.nextSeenMap.N5.length, 3);
+
+  const resGameOver = computeTowerResult({
+    totalCorrect: 14,
+    clearedFloorCount: 1,
+    currentFloorIndex: 1,
+    levels: TOWER_LEVELS
+  });
+  assert.equal(resGameOver.reachedLevel, "N4");
+  assert.equal(resGameOver.clearedLabel, "N5");
+  assert.equal(resGameOver.isAllCleared, false);
+
+  const resClear = computeTowerResult({
+    totalCorrect: 50,
+    clearedFloorCount: 5,
+    currentFloorIndex: 4,
+    levels: TOWER_LEVELS
+  });
+  assert.equal(resClear.reachedLevel, "N1");
+  assert.equal(resClear.clearedLabel, "N1");
+  assert.equal(resClear.isAllCleared, true);
 });
