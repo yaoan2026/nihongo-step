@@ -279,3 +279,39 @@ export function computeStudyReadiness({
     todayQuizDoneCount
   };
 }
+
+export function getAllVocabList(baseVocabList, aiVocabList = []) {
+  const seenIds = new Set();
+  const merged = [];
+  for (const item of [...(baseVocabList || []), ...(Array.isArray(aiVocabList) ? aiVocabList : [])]) {
+    if (!item || !item.id || seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+}
+
+export function mergeAiVocabList(existingAiVocab = [], incomingAiVocab = [], baseVocabList = []) {
+  const existing = Array.isArray(existingAiVocab) ? existingAiVocab : [];
+  const base = Array.isArray(baseVocabList) ? baseVocabList : [];
+  const seenIds = new Set([...base, ...existing].map((v) => v?.id).filter(Boolean));
+  const seenWords = new Set(
+    [...base, ...existing].map((v) => String(v?.word || "").trim()).filter(Boolean)
+  );
+
+  const addedItems = [];
+  for (const item of Array.isArray(incomingAiVocab) ? incomingAiVocab : []) {
+    if (!item || !item.id) continue;
+    const normWord = String(item.word || "").trim();
+    if (!normWord || seenIds.has(item.id) || seenWords.has(normWord)) continue;
+    seenIds.add(item.id);
+    seenWords.add(normWord);
+    addedItems.push(item);
+  }
+
+  return {
+    merged: [...existing, ...addedItems],
+    addedCount: addedItems.length,
+    addedItems
+  };
+}

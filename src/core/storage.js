@@ -12,7 +12,9 @@ export function createDefaultState() {
     wrongBook: {},
     quizHistory: [],
     reviewMarks: { vocab: {}, quiz: {} },
-    grammarNotes: {}
+    grammarNotes: {},
+    aiVocabList: [],
+    lastDailyVocabDate: null
   };
 }
 
@@ -68,7 +70,9 @@ export function exportStateJson(state, nowIso = new Date().toISOString()) {
     wrongBook: state.wrongBook || {},
     quizHistory: Array.isArray(state.quizHistory) ? state.quizHistory : [],
     reviewMarks: state.reviewMarks || { vocab: {}, quiz: {} },
-    grammarNotes: isPlainObject(state.grammarNotes) ? state.grammarNotes : {}
+    grammarNotes: isPlainObject(state.grammarNotes) ? state.grammarNotes : {},
+    aiVocabList: Array.isArray(state.aiVocabList) ? state.aiVocabList : [],
+    lastDailyVocabDate: typeof state.lastDailyVocabDate === "string" ? state.lastDailyVocabDate : null
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -127,7 +131,23 @@ export function validateImportPayload(rawText, expectedSchemaVersion = STUDY_CON
           quiz: isPlainObject(parsed.reviewMarks.quiz) ? parsed.reviewMarks.quiz : {}
         }
       : { vocab: {}, quiz: {} },
-    grammarNotes: isPlainObject(parsed.grammarNotes) ? parsed.grammarNotes : {}
+    grammarNotes: isPlainObject(parsed.grammarNotes) ? parsed.grammarNotes : {},
+    aiVocabList: Array.isArray(parsed.aiVocabList)
+      ? parsed.aiVocabList.filter(
+          (v) =>
+            isPlainObject(v) &&
+            typeof v.id === "string" &&
+            v.id.trim() &&
+            typeof v.word === "string" &&
+            v.word.trim() &&
+            typeof v.kana === "string" &&
+            v.kana.trim() &&
+            typeof v.meaning === "string" &&
+            v.meaning.trim()
+        )
+      : [],
+    lastDailyVocabDate:
+      typeof parsed.lastDailyVocabDate === "string" ? parsed.lastDailyVocabDate : null
   };
 
   const summary = {

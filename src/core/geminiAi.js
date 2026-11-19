@@ -296,3 +296,133 @@ export async function checkJapaneseSentenceWithAi({
 `;
   return callGemini({ apiKey, model, prompt, jsonMode: false });
 }
+
+export function validateAiVocabList(
+  rawList,
+  dateStr,
+  existingIds = [],
+  existingWords = []
+) {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    throw new Error("AI 回傳的單字格式不正確（非陣列或為空）。");
+  }
+
+  const usedIds = new Set(Array.isArray(existingIds) ? existingIds : []);
+  const usedWords = new Set(
+    (Array.isArray(existingWords) ? existingWords : [])
+      .map((w) => String(w || "").trim())
+      .filter(Boolean)
+  );
+
+  const normalized = [];
+  let seq = 1;
+
+  for (let i = 0; i < rawList.length; i += 1) {
+    const item = rawList[i];
+    if (!item || typeof item !== "object") continue;
+
+    const word = stripRubyMarkup(String(item.word || "")).replace(/[{}]/g, "").trim();
+    const kana = stripRubyMarkup(String(item.kana || "")).replace(/[{}]/g, "").trim();
+    const meaning = String(item.meaning || "").trim();
+    if (!word || !kana || !meaning) continue;
+    if (usedWords.has(word)) continue;
+
+    let id = `ai_vocab_${dateStr}_${String(seq).padStart(2, "0")}`;
+    while (usedIds.has(id)) {
+      seq += 1;
+      id = `ai_vocab_${dateStr}_${String(seq).padStart(2, "0")}`;
+    }
+    usedIds.add(id);
+    usedWords.add(word);
+    seq += 1;
+
+    const group = String(item.group || "").trim() || "AI 生成";
+    const pos = String(item.pos || "").trim() || "詞彙";
+    const exampleJa = String(item.exampleJa || "").trim() || `${word}を{使|つか}います。`;
+    const exampleZh = String(item.exampleZh || "").trim() || `使用「${meaning}」造句練習。`;
+
+    normalized.push({
+      id,
+      levelCategory: item.levelCategory === "N3" ? "N3" : "N4",
+      group,
+      word,
+      kana,
+      meaning,
+      pos,
+      exampleJa,
+      exampleZh,
+      source: "Gemini AI 即時生成",
+      contentVersion: dateStr,
+      reviewStatus: "AI 即時生成（建議自行核對）"
+    });
+  }
+
+  if (normalized.length === 0) {
+    throw new Error("無法解析出新的不重複單字，請稍後再試一次。");
+  }
+  return normalized;
+}
+
+export async function generateAiVocab({
+  apiKey,
+  model = DEFAULT_GEMINI_MODEL,
+  dateStr,
+  existingList = [],
+  count = 5,
+  levelFocus = "mixed",
+  topic = ""
+}) {
+  const safeCount = Math.max(1, Math.min(15, Number(count) || 5));
+  const recentWords = (Array.isArray(existingList) ? existingList : [])
+    .slice(-60)
+    .map((v) => v?.word)
+    .filter(Boolean);
+
+  const levelInstruction =
+    levelFocus === "N4"
+      ? "全部為 JLPT N4 程度單字（levelCategory 全填 \"N4\"）。"
+      : levelFocus === "N3"
+        ? "全部為 JLPT N3 程度單字（levelCategory 全填 \"N3\"）。"
+        : "混合 JLPT N4 與 N3 實用單字（大約各半）。";
+
+  const topicInstruction = String(topic || "").trim()
+    ? `主題方向：請圍繞「${String(topic).trim()}」相關情境挑選詞彙。`
+    : "主題方向：日常生活、工作、交通、情感表達或常用動詞／副詞。";
+
+  const prompt = `
+你是一位專業的繁體中文日語教師。請為目前程度約 JLPT N4、目標往 N3 學習的台灣學生，提供 ${safeCount} 個實用的全新日文單字。
+
+嚴格要求：
+1. ${levelInstruction}
+2. ${topicInstruction}
+3. 不得與以下已有單字重複：${recentWords.length > 0 ? recentWords.join("、") : "（無）"}
+4. word 與 kana 欄位請填純日文文字（不要包含 {|} 標記）；word 寫常見漢字表記（若通常用假名則寫假名），kana 只寫平假名讀音。
+5. exampleJa 請寫一句自然實用的 N4～N3 例句，並且句中所有漢字都必須用 {漢字|かんじ} 標註平假名讀音（例如：{明日|あした}、{電車|でんしゃ}）。
+6. meaning、pos、group、exampleZh 必須使用繁體中文（台灣慣用語）。
+7. 只回傳 JSON 陣列，格式如下：
+[
+  {
+    "levelCategory": "N3",
+    "group": "日常生活",
+    "word": "経験",
+    "kana": "けいけん",
+    "meaning": "經驗",
+    "pos": "名詞・する動詞",
+    "exampleJa": "{日本|にほん}での{生活|せいかつ}はとてもいい{経験|けいけん}になりました。",
+    "exampleZh": "在日本的生活成了非常寶貴的經驗。"
+  }
+]
+`;
+
+  const rawText = await callGemini({ apiKey, model, prompt, jsonMode: true });
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
+  }
+
+  const existingIds = (Array.isArray(existingList) ? existingList : []).map((v) => v?.id).filter(Boolean);
+  const existingWords = (Array.isArray(existingList) ? existingList : []).map((v) => v?.word).filter(Boolean);
+  return validateAiVocabList(parsed, dateStr, existingIds, existingWords);
+}

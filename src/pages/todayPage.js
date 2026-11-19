@@ -4,6 +4,7 @@ import { GRAMMAR_LIST } from "../data/grammar.js";
 import { QUIZ_LIST } from "../data/quizzes.js";
 import {
   computeStudyReadiness,
+  getAllVocabList,
   getJapanTimeString,
   getLocalDateString
 } from "../core/studyLogic.js";
@@ -46,9 +47,10 @@ function renderHeroIllustration() {
 export function renderTodayPage(container, { state, navigate }) {
   const today = getLocalDateString();
   const japanTime = getJapanTimeString();
+  const allVocab = getAllVocabList(VOCAB_LIST, state.aiVocabList);
   const stats = computeStudyReadiness({
     state,
-    vocabList: VOCAB_LIST,
+    vocabList: allVocab,
     grammarList: GRAMMAR_LIST,
     quizList: QUIZ_LIST,
     todayStr: today

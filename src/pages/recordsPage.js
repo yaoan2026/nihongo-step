@@ -7,7 +7,7 @@ import {
   applyImportedState,
   resetState
 } from "../core/storage.js";
-import { getLocalDateString } from "../core/studyLogic.js";
+import { getAllVocabList, getLocalDateString } from "../core/studyLogic.js";
 import { escapeHtml, renderRubyText } from "../core/dom.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
 import {
@@ -33,9 +33,10 @@ export function renderRecordsPage(container, { state, updateState }) {
   };
 
   function render() {
-    const vocabAssessed = Object.keys(state.vocabProgress || {}).length;
-    const vocabFamiliar = Object.values(state.vocabProgress || {}).filter(
-      (v) => v?.familiarity === "familiar"
+    const allVocab = getAllVocabList(VOCAB_LIST, state.aiVocabList);
+    const vocabAssessed = allVocab.filter((v) => Boolean(state.vocabProgress?.[v.id])).length;
+    const vocabFamiliar = allVocab.filter(
+      (v) => state.vocabProgress?.[v.id]?.familiarity === "familiar"
     ).length;
     const grammarRead = Object.values(state.grammarProgress || {}).filter((g) => g?.isRead).length;
     const totalAnswered = state.quizStats?.totalAnswered || 0;
@@ -65,7 +66,7 @@ export function renderRecordsPage(container, { state, updateState }) {
         <h2 class="section-heading">學習統計</h2>
         <div class="stat-tiles">
           <div class="stat-tile is-accent">
-            <div class="stat-tile-value">${vocabAssessed}/${VOCAB_LIST.length}</div>
+            <div class="stat-tile-value">${vocabAssessed}/${allVocab.length}</div>
             <div class="stat-tile-label">單字已評估</div>
           </div>
           <div class="stat-tile">

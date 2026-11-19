@@ -1,9 +1,11 @@
 import { STUDY_CONFIG } from "../config/studyConfig.js";
 import { VOCAB_LIST } from "../data/vocab.js";
 import {
+  getAllVocabList,
   getLocalDateString,
   hiraganaToKatakana,
   isVocabDue,
+  mergeAiVocabList,
   rateVocabCard,
   shuffleArray,
   toggleReviewMark
@@ -11,8 +13,15 @@ import {
 import { escapeHtml, renderRubyText, stripRubyMarkup } from "../core/dom.js";
 import { isSpeechSupported, speakJapanese } from "../core/speech.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
+import {
+  generateAiVocab,
+  loadGeminiKey,
+  loadGeminiModel
+} from "../core/geminiAi.js";
 
-export function renderVocabPage(container, { state, updateState, params = {} }) {
+const attemptedDailyAutoDates = new Set();
+
+export function renderVocabPage(container, { state, updateState, navigate, params = {} }) {
   const ui = {
     mode: "active-recall", // "active-recall" | "quiz"
     contextFirst: false,
@@ -26,19 +35,31 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     choiceKey: "",
     selectedChoiceId: null,
     choiceSubmitted: false,
-    pinnedCard: null
+    pinnedCard: null,
+    aiLevel: "mixed",
+    aiCount: "5",
+    aiTopic: "",
+    aiLoading: false,
+    aiNotice: "",
+    aiError: ""
   };
 
-  const groups = Array.from(new Set(VOCAB_LIST.map((v) => v.group)));
+  function getCombinedVocab() {
+    return getAllVocabList(VOCAB_LIST, state.aiVocabList);
+  }
 
   function getFilteredList() {
     const today = getLocalDateString();
-    return VOCAB_LIST.filter((item) => {
+    const allVocab = getCombinedVocab();
+    return allVocab.filter((item) => {
       if (ui.levelFilter !== "all" && item.levelCategory !== ui.levelFilter) {
         return false;
       }
       if (ui.groupFilter !== "all" && item.group !== ui.groupFilter) {
         return false;
+      }
+      if (ui.statusFilter === "ai") {
+        return item.id.startsWith("ai_vocab_");
       }
       if (ui.statusFilter === "marked") {
         return Boolean(state.reviewMarks?.vocab?.[item.id]);
@@ -61,8 +82,9 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     if (!item) return;
     const key = `${item.id}:${ui.index}:${ui.statusFilter}:${ui.levelFilter}`;
     if (ui.choiceKey !== key) {
+      const allVocab = getCombinedVocab();
       const distractors = shuffleArray(
-        VOCAB_LIST.filter((v) => v.id !== item.id)
+        allVocab.filter((v) => v.id !== item.id)
       ).slice(0, 3);
       ui.choiceOptions = shuffleArray([
         { id: item.id, meaning: item.meaning },
@@ -74,8 +96,123 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
     }
   }
 
+  function isStillOnVocabRoute() {
+    return container.isConnected && window.location.hash.replace(/^#/, "") === "vocab";
+  }
+
+  async function runManualAiGenerate() {
+    if (ui.aiLoading) return;
+    const apiKey = loadGeminiKey();
+    if (!apiKey) {
+      ui.aiError = "請先至「學習紀錄與設定」填入 Gemini API Key。";
+      render();
+      return;
+    }
+
+    const today = getLocalDateString();
+    ui.aiLoading = true;
+    ui.aiError = "";
+    ui.aiNotice = "AI 正在生成新單字，請稍候…";
+    render();
+
+    try {
+      const allVocab = getCombinedVocab();
+      const generated = await generateAiVocab({
+        apiKey,
+        model: loadGeminiModel(),
+        dateStr: today,
+        existingList: allVocab,
+        count: Number(ui.aiCount) || 5,
+        levelFocus: ui.aiLevel,
+        topic: ui.aiTopic
+      });
+      const { merged, addedCount } = mergeAiVocabList(
+        state.aiVocabList,
+        generated,
+        VOCAB_LIST
+      );
+      state = updateState({ ...state, aiVocabList: merged });
+
+      if (!isStillOnVocabRoute()) return;
+
+      if (addedCount > 0) {
+        ui.statusFilter = "ai";
+        ui.levelFilter = "all";
+        ui.groupFilter = "all";
+        ui.index = 0;
+        ui.pinnedCard = null;
+        ui.revealed = false;
+        ui.choiceKey = "";
+        ui.aiNotice = `已新增 ${addedCount} 個 AI 新單字，已切換至「AI 生成單字」清單。`;
+      } else {
+        ui.aiNotice = "本次未新增不重複單字，可試著調整主題後再生成。";
+      }
+    } catch (err) {
+      if (!isStillOnVocabRoute()) return;
+      ui.aiNotice = "";
+      ui.aiError = err?.message || "AI 生成單字失敗，請稍後再試。";
+    } finally {
+      if (isStillOnVocabRoute()) {
+        ui.aiLoading = false;
+        render();
+      }
+    }
+  }
+
+  async function triggerDailyAutoVocabIfNeeded() {
+    const apiKey = loadGeminiKey();
+    const today = getLocalDateString();
+    if (!apiKey || state.lastDailyVocabDate === today || attemptedDailyAutoDates.has(today)) {
+      return;
+    }
+    attemptedDailyAutoDates.add(today);
+    ui.aiLoading = true;
+    ui.aiError = "";
+    ui.aiNotice = "正在為今日自動更新 5 個 AI 新單字…";
+    render();
+
+    try {
+      const allVocab = getCombinedVocab();
+      const generated = await generateAiVocab({
+        apiKey,
+        model: loadGeminiModel(),
+        dateStr: today,
+        existingList: allVocab,
+        count: 5,
+        levelFocus: "mixed"
+      });
+      const { merged, addedCount } = mergeAiVocabList(
+        state.aiVocabList,
+        generated,
+        VOCAB_LIST
+      );
+      state = updateState({
+        ...state,
+        aiVocabList: merged,
+        lastDailyVocabDate: today
+      });
+
+      if (!isStillOnVocabRoute()) return;
+      ui.aiNotice =
+        addedCount > 0
+          ? `今日已自動更新並新增 ${addedCount} 個 AI 新單字（已納入待複習清單）。`
+          : "今日自動更新檢查完成，目前無須新增重複單字。";
+    } catch (err) {
+      if (!isStillOnVocabRoute()) return;
+      ui.aiNotice = "";
+      ui.aiError = `今日自動更新單字暫時失敗：${err?.message || "請稍後手動重試。"}`;
+    } finally {
+      if (isStillOnVocabRoute()) {
+        ui.aiLoading = false;
+        render();
+      }
+    }
+  }
+
   function render() {
     const today = getLocalDateString();
+    const allVocab = getCombinedVocab();
+    const groups = Array.from(new Set(allVocab.map((v) => v.group)));
     const list = getFilteredList();
     if (ui.index >= list.length) {
       ui.index = 0;
@@ -85,9 +222,11 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       ensureChoiceOptions(current);
     }
 
-    const dueTotal = VOCAB_LIST.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
-    const reviewedCount = VOCAB_LIST.length - dueTotal;
-    const progressPct = Math.round((reviewedCount / VOCAB_LIST.length) * 100);
+    const dueTotal = allVocab.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
+    const reviewedCount = allVocab.length - dueTotal;
+    const progressPct = allVocab.length > 0 ? Math.round((reviewedCount / allVocab.length) * 100) : 0;
+    const apiKey = loadGeminiKey();
+    const aiVocabCount = Array.isArray(state.aiVocabList) ? state.aiVocabList.length : 0;
 
     container.innerHTML = `
       <div class="page-header">
@@ -101,7 +240,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
         <div class="progress-bar-track">
           <div class="progress-bar-fill" style="width: ${progressPct}%;"></div>
         </div>
-        <span class="progress-bar-label">今日已完成 ${reviewedCount} / ${VOCAB_LIST.length}</span>
+        <span class="progress-bar-label">今日已完成 ${reviewedCount} / ${allVocab.length}</span>
       </div>
 
       <div class="filter-bar">
@@ -141,6 +280,7 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
           <select id="vocab-status-filter">
             <option value="due" ${ui.statusFilter === "due" ? "selected" : ""}>待複習</option>
             <option value="marked" ${ui.statusFilter === "marked" ? "selected" : ""}>已標記複習</option>
+            <option value="ai" ${ui.statusFilter === "ai" ? "selected" : ""}>AI 生成單字（${aiVocabCount}）</option>
             <option value="all" ${ui.statusFilter === "all" ? "selected" : ""}>全部單字</option>
             <option value="unlearned" ${ui.statusFilter === "unlearned" ? "selected" : ""}>未學習</option>
             <option value="unfamiliar" ${ui.statusFilter === "unfamiliar" ? "selected" : ""}>不熟</option>
@@ -167,11 +307,29 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       </div>
 
       ${
+        ui.aiNotice
+          ? `<div class="notice-box notice-info mb-3">${LUCIDE_ICONS.info}<div class="notice-content">${escapeHtml(ui.aiNotice)}</div></div>`
+          : ""
+      }
+
+      ${
+        ui.aiError
+          ? `<div class="notice-box notice-danger mb-3">${LUCIDE_ICONS.x}<div class="notice-content">${escapeHtml(ui.aiError)}</div></div>`
+          : ""
+      }
+
+      ${
         !current
           ? `
         <section class="card empty-state">
           <h2 class="card-title">目前沒有符合條件的單字</h2>
-          <p class="page-desc">${ui.statusFilter === "due" ? "今日待複習的單字已全部完成。" : "請嘗試切換其他分類或學習狀態篩選。"}</p>
+          <p class="page-desc">${
+            ui.statusFilter === "due"
+              ? "今日待複習的單字已全部完成，可使用下方 AI 生成新單字補充練習。"
+              : ui.statusFilter === "ai"
+                ? "目前尚未收錄 AI 生成單字，請使用下方區塊生成新單字。"
+                : "請嘗試切換其他分類或學習狀態篩選。"
+          }</p>
           <div class="btn-row justify-center">
             <button class="btn btn-primary" type="button" id="vocab-show-all-btn">查看全部單字</button>
           </div>
@@ -179,9 +337,86 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       `
           : renderCard(current, state.vocabProgress[current.id], list.length)
       }
+
+      ${renderAiVocabPanel(apiKey, aiVocabCount, today)}
     `;
 
     bindEvents(list, current);
+  }
+
+  function renderAiVocabPanel(apiKey, aiVocabCount, today) {
+    if (!apiKey) {
+      return `
+        <section class="card card-subtle mt-4">
+          <h2 class="section-heading">AI 單字擴充</h2>
+          <p class="page-desc">
+            設定個人的 Gemini API Key 後，每天開啟單字頁會自動更新 5 個新單字，也可隨時手動生成指定程度與主題的 N4／N3 新單字並永久保存。
+          </p>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" id="vocab-go-records-btn">前往設定 API Key</button>
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="card card-subtle mt-4">
+        <div class="section-heading-row mt-0 mb-3">
+          <div class="section-heading-left">
+            ${LUCIDE_ICONS.bookOpen}
+            <h2 class="section-heading mt-0">AI 生成新單字</h2>
+          </div>
+          <span class="section-meta">
+            已收錄 ${aiVocabCount} 字・${state.lastDailyVocabDate === today ? "今日已自動更新" : "可手動補充"}
+          </span>
+        </div>
+        <p class="page-desc">
+          除了每日自動更新外，可依需求手動生成不重複的 N4／N3 新單字（含讀音、例句與標音），生成後會存入本機清單並納入 1 / 3 / 7 天複習排程。
+        </p>
+
+        <div class="filter-bar mt-3 mb-3">
+          <div class="filter-group">
+            <label class="filter-label" for="vocab-ai-level">程度</label>
+            <select id="vocab-ai-level" ${ui.aiLoading ? "disabled" : ""}>
+              <option value="mixed" ${ui.aiLevel === "mixed" ? "selected" : ""}>N4＋N3 混合</option>
+              <option value="N4" ${ui.aiLevel === "N4" ? "selected" : ""}>N4 單字</option>
+              <option value="N3" ${ui.aiLevel === "N3" ? "selected" : ""}>N3 單字</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label" for="vocab-ai-count">數量</label>
+            <select id="vocab-ai-count" ${ui.aiLoading ? "disabled" : ""}>
+              <option value="5" ${ui.aiCount === "5" ? "selected" : ""}>5 個</option>
+              <option value="10" ${ui.aiCount === "10" ? "selected" : ""}>10 個</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="filter-label" for="vocab-ai-topic">主題關鍵字（選填）</label>
+          <input
+            type="text"
+            id="vocab-ai-topic"
+            class="mt-2"
+            placeholder="例如：旅遊、職場、點餐、情緒表達…"
+            value="${escapeHtml(ui.aiTopic)}"
+            ${ui.aiLoading ? "disabled" : ""}
+          />
+        </div>
+
+        <div class="btn-row">
+          <button
+            class="btn btn-primary"
+            type="button"
+            id="vocab-generate-ai-btn"
+            ${ui.aiLoading ? "disabled" : ""}
+          >
+            ${ui.aiLoading ? "AI 生成單字中…" : "手動生成 AI 新單字"}
+          </button>
+        </div>
+      </section>
+    `;
   }
 
   function renderCard(item, prog, total) {
@@ -430,6 +665,21 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
       render();
     });
 
+    container.querySelector("#vocab-go-records-btn")?.addEventListener("click", () => {
+      navigate?.("records");
+    });
+
+    container.querySelector("#vocab-ai-level")?.addEventListener("change", (e) => {
+      ui.aiLevel = e.target.value;
+    });
+    container.querySelector("#vocab-ai-count")?.addEventListener("change", (e) => {
+      ui.aiCount = e.target.value;
+    });
+    container.querySelector("#vocab-ai-topic")?.addEventListener("input", (e) => {
+      ui.aiTopic = e.target.value;
+    });
+    container.querySelector("#vocab-generate-ai-btn")?.addEventListener("click", runManualAiGenerate);
+
     container.querySelectorAll('input[name="vocab-choice"]').forEach((radio) => {
       radio.addEventListener("change", (e) => {
         if (ui.choiceSubmitted) return;
@@ -527,4 +777,5 @@ export function renderVocabPage(container, { state, updateState, params = {} }) 
   }
 
   render();
+  triggerDailyAutoVocabIfNeeded();
 }

@@ -18,13 +18,15 @@ import {
   recordQuizSubmission,
   getJapanTimeString,
   setGrammarNote,
-  computeStudyReadiness
+  computeStudyReadiness,
+  getAllVocabList,
+  mergeAiVocabList
 } from "../src/core/studyLogic.js";
 import {
   renderRubyText,
   stripRubyMarkup
 } from "../src/core/dom.js";
-import { validateAiQuizList } from "../src/core/geminiAi.js";
+import { validateAiQuizList, validateAiVocabList } from "../src/core/geminiAi.js";
 import {
   createDefaultState,
   exportStateJson,
@@ -315,4 +317,61 @@ test("文法造句筆記設定與舊版備份相容匯入", () => {
   const legacyCheck = validateImportPayload(legacyPayload);
   assert.equal(legacyCheck.ok, true);
   assert.deepEqual(legacyCheck.data.grammarNotes, {});
+  assert.deepEqual(legacyCheck.data.aiVocabList, []);
+  assert.equal(legacyCheck.data.lastDailyVocabDate, null);
+});
+
+test("AI 單字驗證、去重與合併儲存正確", () => {
+  const sample = [
+    {
+      levelCategory: "N3",
+      group: "日常生活",
+      word: "{経験|けいけん}",
+      kana: "{けいけん}",
+      meaning: "經驗",
+      pos: "名詞・する動詞",
+      exampleJa: "いい{経験|けいけん}になりました。",
+      exampleZh: "成了很好的經驗。"
+    },
+    {
+      levelCategory: "N4",
+      group: "重複測試",
+      word: "決める",
+      kana: "きめる",
+      meaning: "決定",
+      pos: "他動詞",
+      exampleJa: "{日程|にってい}を{決|き}めます。",
+      exampleZh: "決定日程。"
+    }
+  ];
+
+  const validated = validateAiVocabList(
+    sample,
+    "2026-11-19",
+    ["ai_vocab_2026-11-19_01"],
+    ["決める"]
+  );
+  assert.equal(validated.length, 1);
+  assert.equal(validated[0].id, "ai_vocab_2026-11-19_02");
+  assert.equal(validated[0].word, "経験");
+  assert.equal(validated[0].kana, "けいけん");
+  assert.throws(() => validateAiVocabList([], "2026-11-19"));
+
+  const mergedRes = mergeAiVocabList([], validated, VOCAB_LIST);
+  assert.equal(mergedRes.addedCount, 1);
+  const duplicateRes = mergeAiVocabList(mergedRes.merged, validated, VOCAB_LIST);
+  assert.equal(duplicateRes.addedCount, 0);
+
+  const combined = getAllVocabList(VOCAB_LIST, mergedRes.merged);
+  assert.equal(combined.length, VOCAB_LIST.length + 1);
+
+  const exported = exportStateJson({
+    ...createDefaultState(),
+    aiVocabList: mergedRes.merged,
+    lastDailyVocabDate: "2026-11-19"
+  });
+  const imported = validateImportPayload(exported);
+  assert.equal(imported.ok, true);
+  assert.equal(imported.data.aiVocabList.length, 1);
+  assert.equal(imported.data.lastDailyVocabDate, "2026-11-19");
 });
