@@ -10,8 +10,15 @@ export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 export const PRESET_GEMINI_MODELS = [
   "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
-  "gemini-3.1-pro"
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite-preview",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite"
 ];
+
+let cachedAvailableModels = null;
+let geminiRequestQueue = Promise.resolve();
+let lastRequestFinishedAt = 0;
 
 export function loadGeminiKey(storage = globalThis.localStorage) {
   try {
@@ -36,8 +43,8 @@ export function saveGeminiKey(apiKey, storage = globalThis.localStorage) {
 
 export function loadGeminiModel(storage = globalThis.localStorage) {
   try {
-    const saved = storage?.getItem(MODEL_STORAGE_KEY);
-    if (!saved || saved.startsWith("gemini-2.")) {
+    const saved = String(storage?.getItem(MODEL_STORAGE_KEY) || "").trim();
+    if (!saved || saved.startsWith("gemini-1.")) {
       return DEFAULT_GEMINI_MODEL;
     }
     return saved;
@@ -90,6 +97,61 @@ export function findCachedAiQuizById(questionId, storage = globalThis.localStora
   }
 }
 
+export function parseJsonArrayFromAi(rawText) {
+  const text = String(rawText || "").trim();
+  if (!text) {
+    throw new Error("AI 回傳的內容為空，請再試一次。");
+  }
+
+  const stripped = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    const firstBracket = stripped.indexOf("[");
+    const lastBracket = stripped.lastIndexOf("]");
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+
+    let candidate = "";
+    if (firstBracket !== -1 && lastBracket > firstBracket && (firstBrace === -1 || firstBracket < firstBrace)) {
+      candidate = stripped.slice(firstBracket, lastBracket + 1);
+    } else if (firstBrace !== -1 && lastBrace > firstBrace) {
+      candidate = stripped.slice(firstBrace, lastBrace + 1);
+    }
+
+    if (!candidate) {
+      throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
+    }
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
+    }
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (parsed && typeof parsed === "object") {
+    for (const val of Object.values(parsed)) {
+      if (Array.isArray(val)) {
+        return val;
+      }
+    }
+    if (parsed.word || parsed.title || parsed.prompt) {
+      return [parsed];
+    }
+  }
+
+  throw new Error("AI 回傳的資料格式不正確（非陣列或為空）。");
+}
+
 export function validateAiQuizList(rawList, dateStr) {
   if (!Array.isArray(rawList) || rawList.length === 0) {
     throw new Error("AI 回傳的題目格式不正確（非陣列或為空）。");
@@ -104,10 +166,18 @@ export function validateAiQuizList(rawList, dateStr) {
     if (typeof item.prompt !== "string" || !item.prompt.trim()) continue;
     if (!Array.isArray(item.options) || item.options.length !== 4) continue;
 
-    const options = item.options.map((opt, idx) => ({
-      id: validOptionIds.has(opt?.id) ? opt.id : ["opt_a", "opt_b", "opt_c", "opt_d"][idx],
-      text: String(opt?.text || "").trim()
-    }));
+    const options = item.options.map((opt, idx) => {
+      if (typeof opt === "string") {
+        return {
+          id: ["opt_a", "opt_b", "opt_c", "opt_d"][idx],
+          text: opt.trim()
+        };
+      }
+      return {
+        id: validOptionIds.has(opt?.id) ? opt.id : ["opt_a", "opt_b", "opt_c", "opt_d"][idx],
+        text: String(opt?.text ?? opt?.label ?? "").trim()
+      };
+    });
     if (options.some((o) => !o.text)) continue;
 
     const correctId = options.some((o) => o.id === item.correctOptionId)
@@ -147,7 +217,10 @@ export async function fetchAvailableGeminiModels(apiKey) {
   const models = (data?.models || [])
     .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
     .map((m) => String(m.name || "").replace(/^models\//, ""))
-    .filter((id) => id.startsWith("gemini-"));
+    .filter((id) => id.startsWith("gemini-") && !id.startsWith("gemini-1."));
+  if (models.length > 0) {
+    cachedAvailableModels = models;
+  }
   return models;
 }
 
@@ -160,62 +233,147 @@ async function singleGeminiRequest({ key, model, body }) {
   });
 }
 
+function extractTextFromGeminiResponse(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return "";
+  }
+  const nonThoughtText = parts
+    .filter((p) => p && !p.thought && typeof p.text === "string")
+    .map((p) => p.text)
+    .join("");
+  if (nonThoughtText.trim()) {
+    return nonThoughtText;
+  }
+  return parts
+    .filter((p) => p && typeof p.text === "string")
+    .map((p) => p.text)
+    .join("");
+}
+
+function enqueueGeminiTask(taskFn) {
+  const run = async () => {
+    const elapsed = Date.now() - lastRequestFinishedAt;
+    if (lastRequestFinishedAt > 0 && elapsed < 350) {
+      await new Promise((r) => setTimeout(r, 350 - elapsed));
+    }
+    try {
+      return await taskFn();
+    } finally {
+      lastRequestFinishedAt = Date.now();
+    }
+  };
+  const next = geminiRequestQueue.then(run, run);
+  geminiRequestQueue = next.catch(() => {});
+  return next;
+}
+
 async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMode = false }) {
   const key = String(apiKey || "").trim();
   if (!key) {
     throw new Error("請先至「學習紀錄與設定」填入您的 Gemini API Key。");
   }
 
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: jsonMode
-      ? { responseMimeType: "application/json", temperature: 0.7 }
-      : { temperature: 0.5 }
-  };
+  return enqueueGeminiTask(async () => {
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: jsonMode
+        ? { responseMimeType: "application/json", temperature: 0.7 }
+        : { temperature: 0.5 }
+    };
 
-  const candidates = Array.from(
-    new Set([model, "gemini-3.5-flash-lite", "gemini-3.8-flash"].filter(Boolean))
-  );
+    const detectedFlash = (cachedAvailableModels || []).filter((m) => m.includes("flash"));
+    const candidates = Array.from(
+      new Set([model, ...detectedFlash, ...PRESET_GEMINI_MODELS].filter(Boolean))
+    );
 
-  let lastStatus = 0;
-  let lastErrText = "";
+    let lastStatus = 0;
+    let lastErrText = "";
+    let importantStatus = 0;
+    let importantErrText = "";
+    let primaryWas404 = false;
+    let triedAutoDiscover = false;
 
-  for (let i = 0; i < candidates.length; i += 1) {
-    const targetModel = candidates[i];
-    const res = await singleGeminiRequest({ key, model: targetModel, body });
+    for (let i = 0; i < candidates.length; i += 1) {
+      const targetModel = candidates[i];
+      const res = await singleGeminiRequest({ key, model: targetModel, body });
 
-    if (res.ok) {
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) {
-        throw new Error("Gemini API 未回傳文字內容，請稍後再試。");
+      if (res.ok) {
+        const data = await res.json();
+        const text = extractTextFromGeminiResponse(data);
+        if (!text) {
+          throw new Error("Gemini API 未回傳文字內容，請稍後再試。");
+        }
+        if (primaryWas404 && targetModel !== model) {
+          saveGeminiModel(targetModel);
+        }
+        return text;
       }
-      return text;
+
+      lastStatus = res.status;
+      lastErrText = await res.text().catch(() => "");
+
+      if (res.status === 503 || res.status === 429) {
+        importantStatus = res.status;
+        importantErrText = lastErrText;
+      }
+
+      if (res.status === 403) {
+        throw new Error("Gemini API Key 無效或權限不足，請檢查設定中的 API Key。");
+      }
+
+      if (res.status === 400) {
+        const lowerErr = lastErrText.toLowerCase();
+        if (lowerErr.includes("api_key_invalid") || lowerErr.includes("api key not valid")) {
+          throw new Error("Gemini API Key 無效，請至「學習紀錄與設定」檢查您的 API Key。");
+        }
+        continue;
+      }
+
+      if (res.status === 404) {
+        if (i === 0) {
+          primaryWas404 = true;
+        }
+        if (!triedAutoDiscover && !cachedAvailableModels) {
+          triedAutoDiscover = true;
+          const discovered = await fetchAvailableGeminiModels(key).catch(() => []);
+          const flashFirst = [
+            ...discovered.filter((m) => m.includes("flash")),
+            ...discovered.filter((m) => !m.includes("flash"))
+          ];
+          for (const dm of flashFirst) {
+            if (!candidates.includes(dm)) {
+              candidates.push(dm);
+            }
+          }
+        }
+        continue;
+      }
+
+      // 503 (High demand) / 429 -> 遞增等待後自動嘗試下一個備援模型
+      if (res.status === 503 || res.status === 429) {
+        await new Promise((r) => setTimeout(r, Math.min(2500, 900 * (i + 1))));
+        continue;
+      }
+
+      throw new Error(
+        `Gemini API 呼叫失敗（HTTP ${res.status}）${lastErrText ? `：${lastErrText.slice(0, 120)}` : ""}`
+      );
     }
 
-    lastStatus = res.status;
-    lastErrText = await res.text().catch(() => "");
+    const finalStatus = importantStatus || lastStatus;
+    const finalErrText = importantErrText || lastErrText;
 
-    if (res.status === 400 || res.status === 403) {
-      throw new Error("Gemini API Key 無效或權限不足，請檢查設定中的 API Key。");
+    if (finalStatus === 503 || finalErrText.toLowerCase().includes("high demand")) {
+      throw new Error(
+        "Google AI 伺服器目前尖峰負載中（High Demand），已自動切換備援模型仍忙碌，請等 10～20 秒後再試一次。"
+      );
     }
-
-    // 503 (High demand) / 429 / 404 (model unavailable) -> 短暫等待後自動嘗試下一個備援模型
-    if (res.status === 503 || res.status === 429 || res.status === 404) {
-      await new Promise((r) => setTimeout(r, 700));
-      continue;
+    if (finalStatus === 429) {
+      throw new Error("已達 Gemini API 速率或免費額度上限（429），請稍候 30～60 秒再試。");
     }
-
-    throw new Error(`Gemini API 呼叫失敗（HTTP ${res.status}）${lastErrText ? `：${lastErrText.slice(0, 120)}` : ""}`);
-  }
-
-  if (lastStatus === 503 || lastErrText.toLowerCase().includes("high demand")) {
-    throw new Error("Google AI 伺服器目前尖峰負載中（High Demand），已自動切換備援模型仍忙碌，請等 10～20 秒後再試一次。");
-  }
-  if (lastStatus === 429) {
-    throw new Error("已達 Gemini API 速率或免費額度上限，請稍後再試。");
-  }
-  throw new Error(`Gemini API 暫時無法回應（HTTP ${lastStatus}），請稍後再試。`);
+    throw new Error(`Gemini API 暫時無法回應（HTTP ${finalStatus}），請至設定頁點選「自動偵測可用模型」後再試。`);
+  });
 }
 
 export async function generateDailyAiQuizzes({
@@ -249,12 +407,7 @@ export async function generateDailyAiQuizzes({
 `;
 
   const rawText = await callGemini({ apiKey, model, prompt, jsonMode: true });
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
-  }
+  const parsed = parseJsonArrayFromAi(rawText);
   const quizzes = validateAiQuizList(parsed, dateStr);
   saveCachedDailyAiQuizzes(dateStr, quizzes);
   return quizzes;
@@ -302,7 +455,8 @@ export function validateAiVocabList(
   rawList,
   dateStr,
   existingIds = [],
-  existingWords = []
+  existingWords = [],
+  options = {}
 ) {
   if (!Array.isArray(rawList) || rawList.length === 0) {
     throw new Error("AI 回傳的單字格式不正確（非陣列或為空）。");
@@ -317,6 +471,7 @@ export function validateAiVocabList(
 
   const normalized = [];
   let seq = 1;
+  let skippedDuplicates = 0;
 
   for (let i = 0; i < rawList.length; i += 1) {
     const item = rawList[i];
@@ -326,7 +481,10 @@ export function validateAiVocabList(
     const kana = stripRubyMarkup(String(item.kana || "")).replace(/[{}]/g, "").trim();
     const meaning = String(item.meaning || "").trim();
     if (!word || !kana || !meaning) continue;
-    if (usedWords.has(word)) continue;
+    if (usedWords.has(word)) {
+      skippedDuplicates += 1;
+      continue;
+    }
 
     let id = `ai_vocab_${dateStr}_${String(seq).padStart(2, "0")}`;
     while (usedIds.has(id)) {
@@ -359,6 +517,9 @@ export function validateAiVocabList(
   }
 
   if (normalized.length === 0) {
+    if (options?.allowEmptyOnDuplicate && skippedDuplicates > 0) {
+      return [];
+    }
     throw new Error("無法解析出新的不重複單字，請稍後再試一次。");
   }
   return normalized;
@@ -374,10 +535,13 @@ export async function generateAiVocab({
   topic = ""
 }) {
   const safeCount = Math.max(1, Math.min(15, Number(count) || 5));
-  const recentWords = (Array.isArray(existingList) ? existingList : [])
-    .slice(-60)
+  const allWords = (Array.isArray(existingList) ? existingList : [])
     .map((v) => v?.word)
     .filter(Boolean);
+  const avoidWords =
+    allWords.length <= 180
+      ? allWords
+      : [...allWords.slice(0, 30), ...allWords.slice(-150)];
 
   const levelInstruction =
     levelFocus === "N4"
@@ -396,11 +560,11 @@ export async function generateAiVocab({
 嚴格要求：
 1. ${levelInstruction}
 2. ${topicInstruction}
-3. 不得與以下已有單字重複：${recentWords.length > 0 ? recentWords.join("、") : "（無）"}
+3. 不得與以下已有單字重複（亦請勿輸出範例中的「経験」）：${avoidWords.length > 0 ? avoidWords.join("、") : "（無）"}
 4. word 與 kana 欄位請填純日文文字（不要包含 {|} 標記）；word 寫常見漢字表記（若通常用假名則寫假名），kana 只寫平假名讀音。
 5. exampleJa 請寫一句自然實用的 N4～N3 例句，並且句中所有漢字都必須用 {漢字|かんじ} 標註平假名讀音（例如：{明日|あした}、{電車|でんしゃ}）。
 6. meaning、pos、group、exampleZh 必須使用繁體中文（台灣慣用語）。
-7. 只回傳 JSON 陣列，格式如下：
+7. 只回傳 JSON 陣列（頂層必須為 [...] 陣列），格式如下：
 [
   {
     "levelCategory": "N3",
@@ -416,23 +580,21 @@ export async function generateAiVocab({
 `;
 
   const rawText = await callGemini({ apiKey, model, prompt, jsonMode: true });
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
-  }
+  const parsed = parseJsonArrayFromAi(rawText);
 
   const existingIds = (Array.isArray(existingList) ? existingList : []).map((v) => v?.id).filter(Boolean);
   const existingWords = (Array.isArray(existingList) ? existingList : []).map((v) => v?.word).filter(Boolean);
-  return validateAiVocabList(parsed, dateStr, existingIds, existingWords);
+  return validateAiVocabList(parsed, dateStr, existingIds, existingWords, {
+    allowEmptyOnDuplicate: true
+  });
 }
 
 export function validateAiGrammarList(
   rawList,
   dateStr,
   existingIds = [],
-  existingTitles = []
+  existingTitles = [],
+  options = {}
 ) {
   if (!Array.isArray(rawList) || rawList.length === 0) {
     throw new Error("AI 回傳的文法格式不正確（非陣列或為空）。");
@@ -447,6 +609,7 @@ export function validateAiGrammarList(
 
   const normalized = [];
   let seq = 1;
+  let skippedDuplicates = 0;
 
   for (let i = 0; i < rawList.length; i += 1) {
     const item = rawList[i];
@@ -456,23 +619,25 @@ export function validateAiGrammarList(
     const titleKey = normalizeGrammarTitleKey(title);
     const meaning = String(item.meaning || "").trim();
     if (!title || !titleKey || !meaning) continue;
-    if (usedTitles.has(titleKey)) continue;
+    if (usedTitles.has(titleKey)) {
+      skippedDuplicates += 1;
+      continue;
+    }
 
-    const examples = (Array.isArray(item.examples) ? item.examples : [])
-      .filter(
-        (ex) =>
-          ex &&
-          typeof ex === "object" &&
-          typeof ex.ja === "string" &&
-          ex.ja.trim() &&
-          typeof ex.zh === "string" &&
-          ex.zh.trim()
-      )
-      .slice(0, 3)
-      .map((ex) => ({
-        ja: ex.ja.trim(),
-        zh: ex.zh.trim()
-      }));
+    const rawExamples = Array.isArray(item.examples) ? [...item.examples] : [];
+    if (rawExamples.length === 0 && item.exampleJa && item.exampleZh) {
+      rawExamples.push({ ja: item.exampleJa, zh: item.exampleZh });
+    }
+
+    const examples = rawExamples
+      .map((ex) => {
+        if (!ex || typeof ex !== "object") return null;
+        const ja = String(ex.ja ?? ex.japanese ?? ex.exampleJa ?? "").trim();
+        const zh = String(ex.zh ?? ex.chinese ?? ex.exampleZh ?? "").trim();
+        return ja && zh ? { ja, zh } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 3);
     if (examples.length === 0) continue;
 
     let id = `ai_gram_${dateStr}_${String(seq).padStart(2, "0")}`;
@@ -504,6 +669,9 @@ export function validateAiGrammarList(
   }
 
   if (normalized.length === 0) {
+    if (options?.allowEmptyOnDuplicate && skippedDuplicates > 0) {
+      return [];
+    }
     throw new Error("無法解析出新的不重複文法，請稍後再試一次。");
   }
   return normalized;
@@ -519,10 +687,13 @@ export async function generateAiGrammar({
   topic = ""
 }) {
   const safeCount = Math.max(1, Math.min(5, Number(count) || 2));
-  const recentTitles = (Array.isArray(existingList) ? existingList : [])
-    .slice(-60)
+  const allTitles = (Array.isArray(existingList) ? existingList : [])
     .map((g) => g?.title)
     .filter(Boolean);
+  const avoidTitles =
+    allTitles.length <= 180
+      ? allTitles
+      : [...allTitles.slice(0, 20), ...allTitles.slice(-160)];
 
   const levelInstruction =
     levelFocus === "N4"
@@ -541,42 +712,39 @@ export async function generateAiGrammar({
 嚴格要求：
 1. ${levelInstruction}
 2. ${topicInstruction}
-3. 不得與以下已有文法重複：${recentTitles.length > 0 ? recentTitles.join("、") : "（無）"}
-4. title 欄位請寫乾淨純句型（不要包含 {|} 標記，例如「～おかげで」、「～てばかりいる」）。
+3. 不得與以下已有文法重複（下方 JSON 範例僅供欄位結構參考，請挑選其他未出現過的句型）：${avoidTitles.length > 0 ? avoidTitles.join("、") : "（無）"}
+4. title 欄位請寫乾淨純句型（不要包含 {|} 標記，例如「～最中に」、「～てばかりいる」）。
 5. 每篇文法請提供 2 句自然實用的 N4～N3 例句（examples 陣列），且每句例句的 ja 中所有漢字都必須用 {漢字|かんじ} 標註平假名讀音（例如：{明日|あした}、{電車|でんしゃ}）。
 6. meaning、connection、situation、notes 與每句例句的 zh 都必須使用繁體中文（台灣慣用語）。
-7. 只回傳 JSON 陣列，格式如下：
+7. 只回傳 JSON 陣列（頂層必須為 [...] 陣列），格式如下：
 [
   {
     "levelCategory": "N3",
-    "title": "～おかげで",
-    "meaning": "託～的福／多虧了～",
-    "connection": "動詞・い形容詞普通形／な形容詞＋な／名詞＋の ＋ おかげで",
-    "situation": "用於對正面、令人感謝的結果表達原因。",
+    "title": "～最中に",
+    "meaning": "正在～的時候（恰好發生某事）",
+    "connection": "動詞ている形＋の／名詞＋の ＋ 最中に",
+    "situation": "表示某動作正進行到最高潮時，突然發生了意料之外的干擾事件。",
     "examples": [
       {
-        "ja": "{先生|せんせい}のおかげで、{日本語|にほんご}が{上手|じょうず}になりました。",
-        "zh": "託老師的福，日文變好了。"
+        "ja": "{会議|かいぎ}の{最中|さいちゅう}に、{突然|とつぜん}{停電|ていでん}になりました。",
+        "zh": "正在開會的時候，突然停電了。"
       },
       {
-        "ja": "{早|はや}く{起|お}きたおかげで、{電車|でんしゃ}に{間|ま}に{合|あ}いました。",
-        "zh": "多虧早起，趕上了電車。"
+        "ja": "{食事|しょくじ}をしている{最中|さいちゅう}に、{電話|でんわ}がかかってきました。",
+        "zh": "正在吃飯的時候，電話響了。"
       }
     ],
-    "notes": "多用於帶來正面結果時，若是不好的結果則常用「～せいで」。"
+    "notes": "後面常接意外或令人困擾的突發狀況。"
   }
 ]
 `;
 
   const rawText = await callGemini({ apiKey, model, prompt, jsonMode: true });
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    throw new Error("AI 回傳的 JSON 無法解析，請再試一次。");
-  }
+  const parsed = parseJsonArrayFromAi(rawText);
 
   const existingIds = (Array.isArray(existingList) ? existingList : []).map((g) => g?.id).filter(Boolean);
   const existingTitles = (Array.isArray(existingList) ? existingList : []).map((g) => g?.title).filter(Boolean);
-  return validateAiGrammarList(parsed, dateStr, existingIds, existingTitles);
+  return validateAiGrammarList(parsed, dateStr, existingIds, existingTitles, {
+    allowEmptyOnDuplicate: true
+  });
 }

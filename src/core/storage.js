@@ -59,7 +59,28 @@ export function saveState(state, customStorage) {
   if (!storage) {
     return;
   }
-  storage.setItem(STUDY_CONFIG.storageKey, JSON.stringify(state));
+  const serialized = JSON.stringify(state);
+  try {
+    storage.setItem(STUDY_CONFIG.storageKey, serialized);
+  } catch {
+    try {
+      if (typeof storage.length === "number" && typeof storage.key === "function") {
+        const oldKeys = [];
+        for (let i = 0; i < storage.length; i += 1) {
+          const k = storage.key(i);
+          if (k && k.startsWith("nihongo_step_ai_daily_")) {
+            oldKeys.push(k);
+          }
+        }
+        oldKeys.sort().slice(0, Math.max(1, oldKeys.length - 1)).forEach((k) => {
+          storage.removeItem?.(k);
+        });
+      }
+      storage.setItem(STUDY_CONFIG.storageKey, serialized);
+    } catch {
+      // ignore storage quota errors so memory state still updates
+    }
+  }
 }
 
 export function exportStateJson(state, nowIso = new Date().toISOString()) {

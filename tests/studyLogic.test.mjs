@@ -28,7 +28,14 @@ import {
   renderRubyText,
   stripRubyMarkup
 } from "../src/core/dom.js";
-import { validateAiQuizList, validateAiVocabList, validateAiGrammarList } from "../src/core/geminiAi.js";
+import {
+  loadGeminiModel,
+  parseJsonArrayFromAi,
+  saveGeminiModel,
+  validateAiGrammarList,
+  validateAiQuizList,
+  validateAiVocabList
+} from "../src/core/geminiAi.js";
 import { TOWER_LEVELS, TOWER_QUESTION_BANK } from "../src/data/towerQuestions.js";
 import {
   computeTowerResult,
@@ -526,4 +533,66 @@ test("AI 文法驗證、去重與合併儲存正確", () => {
   assert.equal(imported.data.aiGrammarList.length, 1);
   assert.equal(imported.data.aiGrammarList[0].examples.length, 1);
   assert.equal(imported.data.lastDailyGrammarDate, "2026-11-19");
+});
+
+test("Gemini 模型儲存讀取、JSON 外層包裝解包與全重複容錯正確", () => {
+  const mem = createMemoryStorage();
+  saveGeminiModel("gemini-2.5-flash", mem);
+  assert.equal(loadGeminiModel(mem), "gemini-2.5-flash");
+
+  saveGeminiModel("gemini-3.8-flash", mem);
+  assert.equal(loadGeminiModel(mem), "gemini-3.8-flash");
+
+  saveGeminiModel("gemini-1.5-flash", mem);
+  assert.equal(loadGeminiModel(mem), "gemini-3.8-flash");
+
+  // 測試 Markdown Code Fence 與外層物件包裝解包
+  const fencedWrapped = "```json\n{\"vocab\": [{\"word\":\"習慣\",\"kana\":\"しゅうかん\",\"meaning\":\"習慣\"}]}\n```";
+  const unwrapped = parseJsonArrayFromAi(fencedWrapped);
+  assert.equal(Array.isArray(unwrapped), true);
+  assert.equal(unwrapped.length, 1);
+  assert.equal(unwrapped[0].word, "習慣");
+
+  // 測試全重複時 allowEmptyOnDuplicate 回傳空陣列而不拋錯
+  const dupVocab = validateAiVocabList(
+    [{ word: "決める", kana: "きめる", meaning: "決定" }],
+    "2026-11-19",
+    [],
+    ["決める"],
+    { allowEmptyOnDuplicate: true }
+  );
+  assert.deepEqual(dupVocab, []);
+
+  const dupGrammar = validateAiGrammarList(
+    [
+      {
+        title: "~てみる",
+        meaning: "試著做～",
+        exampleJa: "{食|た}べてみます。",
+        exampleZh: "吃看看。"
+      }
+    ],
+    "2026-11-19",
+    [],
+    ["～てみる"],
+    { allowEmptyOnDuplicate: true }
+  );
+  assert.deepEqual(dupGrammar, []);
+
+  // 測試純字串選項與頂層 exampleJa/exampleZh 容錯
+  const stringOptQuizzes = validateAiQuizList(
+    [
+      {
+        levelCategory: "N4",
+        prompt: "テスト（　）",
+        options: ["A", "B", "C", "D"],
+        correctOptionId: "opt_b",
+        explanation: "B 為正解"
+      }
+    ],
+    "2026-11-19"
+  );
+  assert.equal(stringOptQuizzes.length, 1);
+  assert.equal(stringOptQuizzes[0].options[1].id, "opt_b");
+  assert.equal(stringOptQuizzes[0].options[1].text, "B");
 });

@@ -21,6 +21,7 @@ import {
 const attemptedDailyAutoGrammarDates = new Set();
 
 export function renderGrammarPage(container, { state, updateState, navigate, params = {} }) {
+  let destroyed = false;
   const ui = {
     levelFilter: params.levelFilter || "all",
     readFilter: "all",
@@ -42,7 +43,7 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
   }
 
   function isStillOnGrammarRoute() {
-    return container.isConnected && window.location.hash.replace(/^#/, "") === "grammar";
+    return !destroyed && container.isConnected && window.location.hash.replace(/^#/, "") === "grammar";
   }
 
   function getFiltered() {
@@ -92,12 +93,21 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
         levelFocus: ui.aiLevel,
         topic: ui.aiTopic
       });
-      const { merged, addedCount } = mergeAiGrammarList(
-        state.aiGrammarList,
-        generated,
-        GRAMMAR_LIST
-      );
-      state = updateState({ ...state, aiGrammarList: merged });
+      let addedCount = 0;
+      state = updateState((latestState) => {
+        const mergeRes = mergeAiGrammarList(
+          latestState.aiGrammarList,
+          generated,
+          GRAMMAR_LIST
+        );
+        addedCount = mergeRes.addedCount;
+        return {
+          ...latestState,
+          aiGrammarList: mergeRes.merged,
+          lastDailyGrammarDate:
+            mergeRes.addedCount > 0 ? today : latestState.lastDailyGrammarDate
+        };
+      });
 
       if (!isStillOnGrammarRoute()) return;
 
@@ -146,15 +156,19 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
         count: 2,
         levelFocus: "mixed"
       });
-      const { merged, addedCount } = mergeAiGrammarList(
-        state.aiGrammarList,
-        generated,
-        GRAMMAR_LIST
-      );
-      state = updateState({
-        ...state,
-        aiGrammarList: merged,
-        lastDailyGrammarDate: today
+      let addedCount = 0;
+      state = updateState((latestState) => {
+        const mergeRes = mergeAiGrammarList(
+          latestState.aiGrammarList,
+          generated,
+          GRAMMAR_LIST
+        );
+        addedCount = mergeRes.addedCount;
+        return {
+          ...latestState,
+          aiGrammarList: mergeRes.merged,
+          lastDailyGrammarDate: today
+        };
       });
 
       if (!isStillOnGrammarRoute()) return;
@@ -163,6 +177,7 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
           ? `今日已自動更新並新增 ${addedCount} 篇 AI 新文法（可篩選「AI 生成文法」查看）。`
           : "今日自動更新檢查完成，目前無須新增重複文法。";
     } catch (err) {
+      attemptedDailyAutoGrammarDates.delete(today);
       if (!isStillOnGrammarRoute()) return;
       ui.aiNotice = "";
       ui.aiError = `今日自動更新文法暫時失敗：${err?.message || "請稍後手動重試。"}`;
@@ -544,10 +559,13 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
             sentence: text
           });
         } catch (err) {
+          if (!isStillOnGrammarRoute()) return;
           ui.aiErrors[id] = err?.message || "AI 批改失敗，請稍後再試。";
         } finally {
-          ui.aiLoadingId = "";
-          render();
+          if (isStillOnGrammarRoute()) {
+            ui.aiLoadingId = "";
+            render();
+          }
         }
       });
     });
@@ -561,4 +579,7 @@ export function renderGrammarPage(container, { state, updateState, navigate, par
 
   render();
   triggerDailyAutoGrammarIfNeeded();
+  return () => {
+    destroyed = true;
+  };
 }

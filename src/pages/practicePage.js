@@ -21,6 +21,7 @@ import {
 } from "../core/geminiAi.js";
 
 export function renderPracticePage(container, { state, updateState, navigate, params = {} }) {
+  let destroyed = false;
   const ui = {
     mode: params.wrongOnly ? "wrong" : "daily", // "daily" | "ai" | "all" | "wrong" | "marked"
     shuffleOptions: true,
@@ -51,22 +52,35 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
     for (const q of cachedAi) {
       byId.set(q.id, q);
     }
+    const referencedIds = new Set([
+      ...Object.keys(state.wrongBook || {}),
+      ...Object.keys(state.reviewMarks?.quiz || {})
+    ]);
+    for (const qId of referencedIds) {
+      if (!byId.has(qId)) {
+        const found = findCachedAiQuizById(qId);
+        if (found) {
+          byId.set(found.id, found);
+        }
+      }
+    }
     return { today, cachedAi, byId };
   }
 
   function getBasePool() {
-    const { today, cachedAi } = getActiveQuizSource();
+    const { today, cachedAi, byId } = getActiveQuizSource();
     if (ui.mode === "ai") {
       return cachedAi;
     }
     if (ui.mode === "daily") {
       return getDailyQuizSet(QUIZ_LIST, today, 10);
     }
+    const allKnown = Array.from(byId.values());
     if (ui.mode === "wrong") {
-      return QUIZ_LIST.filter((q) => Object.prototype.hasOwnProperty.call(state.wrongBook || {}, q.id));
+      return allKnown.filter((q) => Object.prototype.hasOwnProperty.call(state.wrongBook || {}, q.id));
     }
     if (ui.mode === "marked") {
-      return QUIZ_LIST.filter((q) => Boolean(state.reviewMarks?.quiz?.[q.id]));
+      return allKnown.filter((q) => Boolean(state.reviewMarks?.quiz?.[q.id]));
     }
     return QUIZ_LIST;
   }
@@ -504,12 +518,16 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
           dateStr: getLocalDateString(),
           count: 10
         });
+        if (destroyed) return;
         rebuildSessionPool();
       } catch (err) {
+        if (destroyed) return;
         ui.aiError = err?.message || "AI 出題失敗，請稍後再試。";
       } finally {
-        ui.aiLoading = false;
-        render();
+        if (!destroyed) {
+          ui.aiLoading = false;
+          render();
+        }
       }
     });
 
@@ -577,18 +595,23 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
       ui.aiExplainError = "";
       render();
       try {
-        ui.aiExplainText = await explainQuizWithAi({
+        const text = await explainQuizWithAi({
           apiKey,
           model: loadGeminiModel(),
           question: current,
           selectedOptionText: ui.lastResult.selectedOption?.text || "",
           correctOptionText: ui.lastResult.correctOption?.text || ""
         });
+        if (destroyed) return;
+        ui.aiExplainText = text;
       } catch (err) {
+        if (destroyed) return;
         ui.aiExplainError = err?.message || "無法取得 AI 解析，請稍後再試。";
       } finally {
-        ui.aiExplainLoading = false;
-        render();
+        if (!destroyed) {
+          ui.aiExplainLoading = false;
+          render();
+        }
       }
     });
 
@@ -602,16 +625,21 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
       ui.sentenceError = "";
       render();
       try {
-        ui.sentenceFeedback = await checkJapaneseSentenceWithAi({
+        const feedback = await checkJapaneseSentenceWithAi({
           apiKey,
           model: loadGeminiModel(),
           sentence: ui.sentenceInput
         });
+        if (destroyed) return;
+        ui.sentenceFeedback = feedback;
       } catch (err) {
+        if (destroyed) return;
         ui.sentenceError = err?.message || "AI 批改失敗，請稍後再試。";
       } finally {
-        ui.sentenceLoading = false;
-        render();
+        if (!destroyed) {
+          ui.sentenceLoading = false;
+          render();
+        }
       }
     });
 
@@ -623,4 +651,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
   }
 
   render();
+  return () => {
+    destroyed = true;
+  };
 }

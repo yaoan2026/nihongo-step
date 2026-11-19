@@ -21,6 +21,7 @@ import {
 } from "../core/geminiAi.js";
 
 export function renderRecordsPage(container, { state, updateState }) {
+  let destroyed = false;
   const ui = {
     importPreview: null,
     importError: "",
@@ -277,17 +278,21 @@ export function renderRecordsPage(container, { state, updateState }) {
       try {
         saveGeminiKey(keyVal);
         const list = await fetchAvailableGeminiModels(keyVal);
+        if (destroyed) return;
         ui.detectedModels = list;
         if (list.length > 0 && !list.includes(loadGeminiModel())) {
           const preferred = list.find((m) => m.includes("flash")) || list[0];
           saveGeminiModel(preferred);
         }
-        ui.aiStatusMessage = `已偵測到 ${list.length} 個可用模型，請確認下拉選單後按「儲存 AI 設定」。`;
+        ui.aiStatusMessage = `已偵測到 ${list.length} 個可用模型，已自動選用「${loadGeminiModel()}」（亦可從下拉選單改選後按「儲存 AI 設定」）。`;
       } catch (err) {
+        if (destroyed) return;
         ui.aiErrorMessage = err?.message || "偵測失敗，請檢查 API Key。";
       } finally {
-        ui.aiDetecting = false;
-        render();
+        if (!destroyed) {
+          ui.aiDetecting = false;
+          render();
+        }
       }
     });
 
@@ -380,4 +385,7 @@ export function renderRecordsPage(container, { state, updateState }) {
   }
 
   render();
+  return () => {
+    destroyed = true;
+  };
 }

@@ -21,8 +21,11 @@ let appState = loadState();
 let pendingParams = {};
 let activeRouteCleanup = null;
 
-function updateState(nextState) {
-  appState = nextState;
+function updateState(nextOrUpdater) {
+  appState =
+    typeof nextOrUpdater === "function"
+      ? nextOrUpdater(appState)
+      : nextOrUpdater;
   saveState(appState);
   return appState;
 }

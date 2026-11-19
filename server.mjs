@@ -44,7 +44,10 @@ const server = http.createServer(async (req, res) => {
     const ext = path.extname(resolvedPath).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
     const data = await fs.readFile(resolvedPath);
-    res.writeHead(200, { "Content-Type": contentType });
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      "Cache-Control": "no-cache, no-store, must-revalidate"
+    });
     res.end(data);
   } catch (err) {
     res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });

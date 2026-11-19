@@ -22,6 +22,7 @@ import {
 const attemptedDailyAutoDates = new Set();
 
 export function renderVocabPage(container, { state, updateState, navigate, params = {} }) {
+  let destroyed = false;
   const ui = {
     mode: "active-recall", // "active-recall" | "quiz"
     contextFirst: false,
@@ -97,7 +98,7 @@ export function renderVocabPage(container, { state, updateState, navigate, param
   }
 
   function isStillOnVocabRoute() {
-    return container.isConnected && window.location.hash.replace(/^#/, "") === "vocab";
+    return !destroyed && container.isConnected && window.location.hash.replace(/^#/, "") === "vocab";
   }
 
   async function runManualAiGenerate() {
@@ -126,12 +127,21 @@ export function renderVocabPage(container, { state, updateState, navigate, param
         levelFocus: ui.aiLevel,
         topic: ui.aiTopic
       });
-      const { merged, addedCount } = mergeAiVocabList(
-        state.aiVocabList,
-        generated,
-        VOCAB_LIST
-      );
-      state = updateState({ ...state, aiVocabList: merged });
+      let addedCount = 0;
+      state = updateState((latestState) => {
+        const mergeRes = mergeAiVocabList(
+          latestState.aiVocabList,
+          generated,
+          VOCAB_LIST
+        );
+        addedCount = mergeRes.addedCount;
+        return {
+          ...latestState,
+          aiVocabList: mergeRes.merged,
+          lastDailyVocabDate:
+            mergeRes.addedCount > 0 ? today : latestState.lastDailyVocabDate
+        };
+      });
 
       if (!isStillOnVocabRoute()) return;
 
@@ -181,15 +191,19 @@ export function renderVocabPage(container, { state, updateState, navigate, param
         count: 5,
         levelFocus: "mixed"
       });
-      const { merged, addedCount } = mergeAiVocabList(
-        state.aiVocabList,
-        generated,
-        VOCAB_LIST
-      );
-      state = updateState({
-        ...state,
-        aiVocabList: merged,
-        lastDailyVocabDate: today
+      let addedCount = 0;
+      state = updateState((latestState) => {
+        const mergeRes = mergeAiVocabList(
+          latestState.aiVocabList,
+          generated,
+          VOCAB_LIST
+        );
+        addedCount = mergeRes.addedCount;
+        return {
+          ...latestState,
+          aiVocabList: mergeRes.merged,
+          lastDailyVocabDate: today
+        };
       });
 
       if (!isStillOnVocabRoute()) return;
@@ -198,6 +212,7 @@ export function renderVocabPage(container, { state, updateState, navigate, param
           ? `今日已自動更新並新增 ${addedCount} 個 AI 新單字（已納入待複習清單）。`
           : "今日自動更新檢查完成，目前無須新增重複單字。";
     } catch (err) {
+      attemptedDailyAutoDates.delete(today);
       if (!isStillOnVocabRoute()) return;
       ui.aiNotice = "";
       ui.aiError = `今日自動更新單字暫時失敗：${err?.message || "請稍後手動重試。"}`;
@@ -778,4 +793,7 @@ export function renderVocabPage(container, { state, updateState, navigate, param
 
   render();
   triggerDailyAutoVocabIfNeeded();
+  return () => {
+    destroyed = true;
+  };
 }
