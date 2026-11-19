@@ -281,7 +281,11 @@ export function renderRecordsPage(container, { state, updateState }) {
         if (destroyed) return;
         ui.detectedModels = list;
         if (list.length > 0 && !list.includes(loadGeminiModel())) {
-          const preferred = list.find((m) => m.includes("flash")) || list[0];
+          const preferred =
+            list.find((m) => m === "gemini-2.5-flash") ||
+            list.find((m) => m === "gemini-2.5-flash-lite") ||
+            list.find((m) => m.includes("flash") && !m.includes("pro")) ||
+            list[0];
           saveGeminiModel(preferred);
         }
         ui.aiStatusMessage = `已偵測到 ${list.length} 個可用模型，已自動選用「${loadGeminiModel()}」（亦可從下拉選單改選後按「儲存 AI 設定」）。`;

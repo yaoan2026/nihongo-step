@@ -29,6 +29,8 @@ import {
   stripRubyMarkup
 } from "../src/core/dom.js";
 import {
+  DEFAULT_GEMINI_MODEL,
+  isTextChatModel,
   loadGeminiModel,
   parseJsonArrayFromAi,
   saveGeminiModel,
@@ -536,15 +538,25 @@ test("AI 文法驗證、去重與合併儲存正確", () => {
 });
 
 test("Gemini 模型儲存讀取、JSON 外層包裝解包與全重複容錯正確", () => {
+  assert.equal(DEFAULT_GEMINI_MODEL, "gemini-2.5-flash");
+
   const mem = createMemoryStorage();
-  saveGeminiModel("gemini-2.5-flash", mem);
+  saveGeminiModel("gemini-2.5-flash-lite", mem);
+  assert.equal(loadGeminiModel(mem), "gemini-2.5-flash-lite");
+
+  // 舊版無效預設名稱與 1.x 模型應自動升級回預設穩定模型
+  saveGeminiModel("gemini-3.8-flash", mem);
   assert.equal(loadGeminiModel(mem), "gemini-2.5-flash");
 
-  saveGeminiModel("gemini-3.8-flash", mem);
-  assert.equal(loadGeminiModel(mem), "gemini-3.8-flash");
-
   saveGeminiModel("gemini-1.5-flash", mem);
-  assert.equal(loadGeminiModel(mem), "gemini-3.8-flash");
+  assert.equal(loadGeminiModel(mem), "gemini-2.5-flash");
+
+  assert.equal(isTextChatModel("gemini-2.5-flash"), true);
+  assert.equal(isTextChatModel("gemini-2.5-flash-lite"), true);
+  assert.equal(isTextChatModel("gemini-2.5-flash-preview-tts"), false);
+  assert.equal(isTextChatModel("gemini-2.5-flash-image"), false);
+  assert.equal(isTextChatModel("gemini-2.0-flash-exp"), false);
+  assert.equal(isTextChatModel("gemini-robotics-er-1.5-preview"), false);
 
   // 測試 Markdown Code Fence 與外層物件包裝解包
   const fencedWrapped = "```json\n{\"vocab\": [{\"word\":\"習慣\",\"kana\":\"しゅうかん\",\"meaning\":\"習慣\"}]}\n```";

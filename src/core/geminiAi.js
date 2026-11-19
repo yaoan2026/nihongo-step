@@ -5,16 +5,45 @@ const API_KEY_STORAGE_KEY = "nihongo_step_gemini_api_key";
 const MODEL_STORAGE_KEY = "nihongo_step_gemini_model";
 const DAILY_AI_PREFIX = "nihongo_step_ai_daily_";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 export const PRESET_GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite-preview"
+];
+
+const UNSUPPORTED_TEXT_MODEL_KEYWORDS = [
+  "-tts",
+  "-image",
+  "-robotics",
+  "-computer-use",
+  "-customtools",
+  "deep-research",
+  "-audio",
+  "-live",
+  "-exp",
+  "embedding",
+  "imagen",
+  "veo",
+  "aqa"
+];
+
+export function isTextChatModel(modelId) {
+  const id = String(modelId || "").trim().toLowerCase();
+  if (!id || !id.startsWith("gemini-") || id.startsWith("gemini-1.")) {
+    return false;
+  }
+  return !UNSUPPORTED_TEXT_MODEL_KEYWORDS.some((kw) => id.includes(kw));
+}
+
+const LEGACY_INVALID_DEFAULT_MODELS = new Set([
   "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
-  "gemini-3-flash-preview",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite"
-];
+  "gemini-3.1-pro"
+]);
 
 let cachedAvailableModels = null;
 let geminiRequestQueue = Promise.resolve();
@@ -44,7 +73,7 @@ export function saveGeminiKey(apiKey, storage = globalThis.localStorage) {
 export function loadGeminiModel(storage = globalThis.localStorage) {
   try {
     const saved = String(storage?.getItem(MODEL_STORAGE_KEY) || "").trim();
-    if (!saved || saved.startsWith("gemini-1.")) {
+    if (!saved || saved.startsWith("gemini-1.") || LEGACY_INVALID_DEFAULT_MODELS.has(saved)) {
       return DEFAULT_GEMINI_MODEL;
     }
     return saved;
@@ -211,17 +240,52 @@ export async function fetchAvailableGeminiModels(apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`無法取得模型清單（HTTP ${res.status}），請確認 API Key 是否有效。`);
+    const errText = await res.text().catch(() => "");
+    const detail = extractGoogleApiErrorMessage(errText);
+    throw new Error(
+      `無法取得模型清單（HTTP ${res.status}）${detail ? `：${detail}` : "，請確認 API Key 是否有效。"}`
+    );
   }
   const data = await res.json();
-  const models = (data?.models || [])
+  const rawModels = (data?.models || [])
     .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
     .map((m) => String(m.name || "").replace(/^models\//, ""))
-    .filter((id) => id.startsWith("gemini-") && !id.startsWith("gemini-1."));
+    .filter((id) => isTextChatModel(id));
+
+  const priorityOrder = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite"
+  ];
+  const models = Array.from(new Set(rawModels)).sort((a, b) => {
+    const ia = priorityOrder.indexOf(a);
+    const ib = priorityOrder.indexOf(b);
+    if (ia !== -1 || ib !== -1) {
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    }
+    const fa = a.includes("flash") ? 0 : 1;
+    const fb = b.includes("flash") ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+    return a.localeCompare(b);
+  });
+
   if (models.length > 0) {
     cachedAvailableModels = models;
   }
   return models;
+}
+
+function extractGoogleApiErrorMessage(rawErrText) {
+  const text = String(rawErrText || "").trim();
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text);
+    const msg = parsed?.error?.message || parsed?.message || "";
+    return String(msg).replace(/\s+/g, " ").trim().slice(0, 180);
+  } catch {
+    return text.replace(/\s+/g, " ").trim().slice(0, 180);
+  }
 }
 
 async function singleGeminiRequest({ key, model, body }) {
@@ -282,10 +346,12 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
         : { temperature: 0.5 }
     };
 
-    const detectedFlash = (cachedAvailableModels || []).filter((m) => m.includes("flash"));
+    const detectedFlash = (cachedAvailableModels || []).filter(
+      (m) => isTextChatModel(m) && m.includes("flash")
+    );
     const candidates = Array.from(
       new Set([model, ...detectedFlash, ...PRESET_GEMINI_MODELS].filter(Boolean))
-    );
+    ).slice(0, 4);
 
     let lastStatus = 0;
     let lastErrText = "";
@@ -293,6 +359,7 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
     let importantErrText = "";
     let primaryWas404 = false;
     let triedAutoDiscover = false;
+    const attemptLogs = [];
 
     for (let i = 0; i < candidates.length; i += 1) {
       const targetModel = candidates[i];
@@ -302,7 +369,7 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
         const data = await res.json();
         const text = extractTextFromGeminiResponse(data);
         if (!text) {
-          throw new Error("Gemini API 未回傳文字內容，請稍後再試。");
+          throw new Error(`Gemini API（${targetModel}）未回傳文字內容，請稍後再試。`);
         }
         if (primaryWas404 && targetModel !== model) {
           saveGeminiModel(targetModel);
@@ -312,20 +379,27 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
 
       lastStatus = res.status;
       lastErrText = await res.text().catch(() => "");
+      attemptLogs.push(`${targetModel} → HTTP ${res.status}`);
 
       if (res.status === 503 || res.status === 429) {
         importantStatus = res.status;
         importantErrText = lastErrText;
       }
 
+      const detail = extractGoogleApiErrorMessage(lastErrText);
+
       if (res.status === 403) {
-        throw new Error("Gemini API Key 無效或權限不足，請檢查設定中的 API Key。");
+        throw new Error(
+          `Gemini API Key 無效、權限不足或網域受限（HTTP 403，模型：${targetModel}）${detail ? `：${detail}` : "，請檢查 API Key 與 Google Cloud 網域限制設定。"}`
+        );
       }
 
       if (res.status === 400) {
         const lowerErr = lastErrText.toLowerCase();
         if (lowerErr.includes("api_key_invalid") || lowerErr.includes("api key not valid")) {
-          throw new Error("Gemini API Key 無效，請至「學習紀錄與設定」檢查您的 API Key。");
+          throw new Error(
+            `Gemini API Key 無效（HTTP 400）${detail ? `：${detail}` : "，請至「學習紀錄與設定」檢查您的 API Key。"}`
+          );
         }
         continue;
       }
@@ -342,7 +416,7 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
             ...discovered.filter((m) => !m.includes("flash"))
           ];
           for (const dm of flashFirst) {
-            if (!candidates.includes(dm)) {
+            if (!candidates.includes(dm) && candidates.length < 5) {
               candidates.push(dm);
             }
           }
@@ -357,22 +431,28 @@ async function callGemini({ apiKey, model = DEFAULT_GEMINI_MODEL, prompt, jsonMo
       }
 
       throw new Error(
-        `Gemini API 呼叫失敗（HTTP ${res.status}）${lastErrText ? `：${lastErrText.slice(0, 120)}` : ""}`
+        `Gemini API 呼叫失敗（HTTP ${res.status}，模型：${targetModel}）${detail ? `：${detail}` : ""}`
       );
     }
 
     const finalStatus = importantStatus || lastStatus;
     const finalErrText = importantErrText || lastErrText;
+    const finalDetail = extractGoogleApiErrorMessage(finalErrText);
+    const attemptSummary = attemptLogs.join("、");
 
-    if (finalStatus === 503 || finalErrText.toLowerCase().includes("high demand")) {
+    if (finalStatus === 429) {
       throw new Error(
-        "Google AI 伺服器目前尖峰負載中（High Demand），已自動切換備援模型仍忙碌，請等 10～20 秒後再試一次。"
+        `已達 Gemini 免費額度或每分鐘請求上限（HTTP 429｜嘗試：${attemptSummary}）。${finalDetail ? `Google 回應：${finalDetail}` : "請稍候 30～60 秒後再試。"}`
       );
     }
-    if (finalStatus === 429) {
-      throw new Error("已達 Gemini API 速率或免費額度上限（429），請稍候 30～60 秒再試。");
+    if (finalStatus === 503 || finalErrText.toLowerCase().includes("high demand")) {
+      throw new Error(
+        `Google AI 伺服器目前尖峰負載中（HTTP 503｜嘗試：${attemptSummary}）。${finalDetail ? `Google 回應：${finalDetail}` : "請等 10～20 秒後再試一次。"}`
+      );
     }
-    throw new Error(`Gemini API 暫時無法回應（HTTP ${finalStatus}），請至設定頁點選「自動偵測可用模型」後再試。`);
+    throw new Error(
+      `Gemini API 暫時無法回應（HTTP ${finalStatus}｜嘗試：${attemptSummary}）${finalDetail ? `：${finalDetail}` : "，請至設定頁點選「自動偵測可用模型」後再試。"}`
+    );
   });
 }
 
