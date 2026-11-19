@@ -11,7 +11,8 @@ export function createDefaultState() {
     },
     wrongBook: {},
     quizHistory: [],
-    reviewMarks: { vocab: {}, quiz: {} }
+    reviewMarks: { vocab: {}, quiz: {} },
+    grammarNotes: {}
   };
 }
 
@@ -66,7 +67,8 @@ export function exportStateJson(state, nowIso = new Date().toISOString()) {
     quizStats: state.quizStats || { totalAnswered: 0, totalCorrect: 0 },
     wrongBook: state.wrongBook || {},
     quizHistory: Array.isArray(state.quizHistory) ? state.quizHistory : [],
-    reviewMarks: state.reviewMarks || { vocab: {}, quiz: {} }
+    reviewMarks: state.reviewMarks || { vocab: {}, quiz: {} },
+    grammarNotes: isPlainObject(state.grammarNotes) ? state.grammarNotes : {}
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -124,7 +126,8 @@ export function validateImportPayload(rawText, expectedSchemaVersion = STUDY_CON
           vocab: isPlainObject(parsed.reviewMarks.vocab) ? parsed.reviewMarks.vocab : {},
           quiz: isPlainObject(parsed.reviewMarks.quiz) ? parsed.reviewMarks.quiz : {}
         }
-      : { vocab: {}, quiz: {} }
+      : { vocab: {}, quiz: {} },
+    grammarNotes: isPlainObject(parsed.grammarNotes) ? parsed.grammarNotes : {}
   };
 
   const summary = {

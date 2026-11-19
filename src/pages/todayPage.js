@@ -2,219 +2,336 @@ import { STUDY_CONFIG } from "../config/studyConfig.js";
 import { VOCAB_LIST } from "../data/vocab.js";
 import { GRAMMAR_LIST } from "../data/grammar.js";
 import { QUIZ_LIST } from "../data/quizzes.js";
-import { getLocalDateString, isVocabDue } from "../core/studyLogic.js";
+import {
+  computeStudyReadiness,
+  getJapanTimeString,
+  getLocalDateString
+} from "../core/studyLogic.js";
 import { LUCIDE_ICONS } from "../core/icons.js";
+
+function renderHeroIllustration() {
+  return `
+    <div class="hero-illustration-wrap" aria-hidden="true">
+      <svg class="hero-illustration-svg" viewBox="0 0 600 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- 天空背景與飄雲 -->
+        <rect width="600" height="180" fill="#CBE4F9"/>
+        <path d="M24 38H596" stroke="#2B2118" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.22"/>
+        <!-- 雲朵 -->
+        <path d="M58 58C50 58 44 52 44 45C44 38.5 49 33 55.5 32.2C58 24 65.5 18 74.5 18C85.2 18 94 26.5 94.5 37C100.5 38 105 43.2 105 49.5C105 56.4 99.4 62 92.5 62H58V58Z" fill="#FFFFFF" stroke="#2B2118" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M482 54C475 54 470 49 470 43C470 37.5 474 33 479.5 32.2C482 25.5 488.5 21 496 21C505 21 512.5 28 513 36.8C518.5 37.8 522.5 42.3 522.5 47.8C522.5 53.8 517.8 58.5 511.8 58.5H482V54Z" fill="#FFFFFF" stroke="#2B2118" stroke-width="2.2" stroke-linejoin="round"/>
+        <!-- 太陽 -->
+        <circle cx="144" cy="48" r="16" fill="#FAD460" stroke="#2B2118" stroke-width="2.2"/>
+        <!-- 遠山與富士山 -->
+        <path d="M0 144L82 102L152 144H0Z" fill="#B5E2A8" stroke="#2B2118" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M210 144L296 50H328L416 144H210Z" fill="#8CC5E3" stroke="#2B2118" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M276 72L296 50H328L348 72L334 80L322 72L312 82L300 72L288 80L276 72Z" fill="#FFFFFF" stroke="#2B2118" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M406 144L492 98L600 144H406Z" fill="#B5E2A8" stroke="#2B2118" stroke-width="2.2" stroke-linejoin="round"/>
+        <!-- 鳥居 -->
+        <path d="M448 92H496M453 102H491M462 92V144M482 92V144" stroke="#2B2118" stroke-width="2.4" stroke-linecap="round"/>
+        <rect x="446" y="87" width="52" height="6" rx="2" fill="#F6A6A6" stroke="#2B2118" stroke-width="2.2"/>
+        <!-- 地面與鐵道 -->
+        <rect y="144" width="600" height="36" fill="#FBF7F0"/>
+        <line x1="0" y1="144" x2="600" y2="144" stroke="#2B2118" stroke-width="2.4"/>
+        <!-- 日系小火車（手帳旅途意象） -->
+        <rect x="116" y="122" width="146" height="22" rx="6" fill="#F6A6A6" stroke="#2B2118" stroke-width="2.2"/>
+        <rect x="128" y="127" width="20" height="9" rx="2" fill="#FFFFFF" stroke="#2B2118" stroke-width="1.8"/>
+        <rect x="156" y="127" width="20" height="9" rx="2" fill="#FFFFFF" stroke="#2B2118" stroke-width="1.8"/>
+        <rect x="184" y="127" width="20" height="9" rx="2" fill="#FFFFFF" stroke="#2B2118" stroke-width="1.8"/>
+        <rect x="212" y="127" width="20" height="9" rx="2" fill="#FFFFFF" stroke="#2B2118" stroke-width="1.8"/>
+        <rect x="240" y="127" width="12" height="9" rx="2" fill="#FAD460" stroke="#2B2118" stroke-width="1.8"/>
+        <!-- 學習筆記本 -->
+        <rect x="526" y="106" width="46" height="38" rx="5" fill="#FAD460" stroke="#2B2118" stroke-width="2.2"/>
+        <line x1="536" y1="116" x2="562" y2="116" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+        <line x1="536" y1="124" x2="558" y2="124" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+        <line x1="536" y1="132" x2="552" y2="132" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+  `;
+}
 
 export function renderTodayPage(container, { state, navigate }) {
   const today = getLocalDateString();
+  const japanTime = getJapanTimeString();
+  const stats = computeStudyReadiness({
+    state,
+    vocabList: VOCAB_LIST,
+    grammarList: GRAMMAR_LIST,
+    quizList: QUIZ_LIST,
+    todayStr: today
+  });
 
-  const n4Vocab = VOCAB_LIST.filter((v) => v.levelCategory === "N4");
-  const n3Vocab = VOCAB_LIST.filter((v) => v.levelCategory === "N3");
-  const n4Due = n4Vocab.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
-  const n3Due = n3Vocab.filter((v) => isVocabDue(state.vocabProgress[v.id], today)).length;
-  const totalDue = n4Due + n3Due;
+  const priorityTask =
+    stats.dueVocabCount > 0
+      ? {
+          tag: "步驟 1・SRS 到期複習",
+          title: `還有 ${stats.dueVocabCount} 個單字待主動回想`,
+          desc: "先看日文漢字或例句語境回想意思，再決定是否顯示答案，記憶留存效果最高。",
+          route: "vocab",
+          params: {},
+          btnText: "開始複習單字"
+        }
+      : stats.unreadGrammarCount > 0
+        ? {
+            tag: "步驟 2・語境理解輸入",
+            title: `尚有 ${stats.unreadGrammarCount} 篇文法筆記未讀`,
+            desc: "透過例句理解接續與語感差異，並試著在筆記區造一句自己的例句。",
+            route: "grammar",
+            params: {},
+            btnText: "前往文法筆記"
+          }
+        : stats.unresolvedWrongCount > 0
+          ? {
+              tag: "步驟 4・錯題檢索強化",
+              title: `錯題本還有 ${stats.unresolvedWrongCount} 題待重練`,
+              desc: "集中重做曾答錯的題目，比盲目刷大量新題更能突破 N4→N3 盲點。",
+              route: "practice",
+              params: { wrongOnly: true },
+              btnText: "只練錯題"
+            }
+          : {
+              tag: "步驟 3・語境克漏字測驗",
+              title: "今日單字與文法已就緒，來做每日 10 題！",
+              desc: "在完整句型語境中練習 Cloze 單選題，強化實際閱讀反應速度。",
+              route: "practice",
+              params: {},
+              btnText: "開始每日測驗"
+            };
 
-  const n4Grammar = GRAMMAR_LIST.filter((g) => g.levelCategory === "N4");
-  const n3Grammar = GRAMMAR_LIST.filter((g) => g.levelCategory === "N3");
-  const n4Unread = n4Grammar.filter((g) => !state.grammarProgress[g.id]?.isRead).length;
-  const n3Unread = n3Grammar.filter((g) => !state.grammarProgress[g.id]?.isRead).length;
-
-  const wrongEntries = Object.values(state.wrongBook || {});
-  const unresolvedWrongCount = wrongEntries.filter((w) => !w.lastIsCorrect).length;
-
-  const vocabReviewedCount = Object.keys(state.vocabProgress || {}).length;
-  const vocabFamiliarCount = Object.values(state.vocabProgress || {}).filter(
-    (v) => v?.familiarity === "familiar"
-  ).length;
-  const grammarReadCount = Object.values(state.grammarProgress || {}).filter((g) => g?.isRead).length;
-  const totalCorrect = state.quizStats?.totalCorrect || 0;
-  const totalXp = vocabReviewedCount * 10 + grammarReadCount * 15 + totalCorrect * 10;
-
-  // 距離 N3 綜合進度（單字 40% + 文法 30% + 測驗答對 30%，以題庫 40 題為基準）
-  const vocabRatio = VOCAB_LIST.length > 0 ? Math.min(1, vocabReviewedCount / VOCAB_LIST.length) : 0;
-  const grammarRatio = GRAMMAR_LIST.length > 0 ? Math.min(1, grammarReadCount / GRAMMAR_LIST.length) : 0;
-  const quizRatio = QUIZ_LIST.length > 0 ? Math.min(1, totalCorrect / QUIZ_LIST.length) : 0;
-  const n3ProgressPct = Math.round((vocabRatio * 0.4 + grammarRatio * 0.3 + quizRatio * 0.3) * 100);
-
-  const primaryAction = n4Due > 0
-    ? { route: "vocab", params: { levelFilter: "N4" }, label: "開始 N4 單字關卡" }
-    : n4Unread > 0
-      ? { route: "grammar", params: { levelFilter: "N4" }, label: "閱讀 N4 文法筆記" }
-      : unresolvedWrongCount > 0
-        ? { route: "practice", params: { wrongOnly: true }, label: "挑戰錯題特訓" }
-        : { route: "practice", params: {}, label: "開始單選練習" };
+  const checklistItems = [
+    {
+      label: "今日 SRS 到期單字複習",
+      detail:
+        stats.dueVocabCount === 0
+          ? "今日到期單字已全數完成"
+          : `已複習 ${stats.todayVocabDoneCount} 字，尚餘 ${stats.dueVocabCount} 字`,
+      done: stats.dueVocabCount === 0
+    },
+    {
+      label: "閱讀並練習 N4→N3 文法例句",
+      detail:
+        stats.unreadGrammarCount === 0
+          ? "5 篇文法已全數閱讀"
+          : `已讀 ${stats.readGrammarCount} / ${GRAMMAR_LIST.length} 篇`,
+      done: stats.unreadGrammarCount === 0
+    },
+    {
+      label: "完成今日語境克漏字練習",
+      detail:
+        stats.todayQuizDoneCount > 0
+          ? `今日已作答 ${stats.todayQuizDoneCount} 題`
+          : "今日尚未進行單選練習",
+      done: stats.todayQuizDoneCount > 0
+    },
+    {
+      label: "檢索重練錯題本",
+      detail:
+        stats.wrongTotalCount === 0
+          ? "目前沒有未解決錯題"
+          : stats.unresolvedWrongCount === 0
+            ? "曾錯題目近期皆已答對"
+            : `還有 ${stats.unresolvedWrongCount} 題待重新答對`,
+      done: stats.unresolvedWrongCount === 0
+    }
+  ];
+  const checklistDoneCount = checklistItems.filter((item) => item.done).length;
 
   container.innerHTML = `
-    <div class="page-header">
-      <h2 class="page-title">今日學習路徑</h2>
-      <p class="page-desc">今日日期：${today}｜依序完成關卡，累積學習 XP。</p>
+    <div class="page-top-row">
+      <h2 class="page-title">首頁</h2>
+      <span class="jp-clock">日本時間 ${japanTime}</span>
     </div>
 
-    <section class="n3-goal-card" aria-label="距離 N3 學習進度">
-      <div class="n3-goal-header">
-        <span class="n3-goal-title">距離 N3 目標進度條</span>
-        <span class="n3-goal-pct">${n3ProgressPct}%</span>
-      </div>
-      <div class="duo-progress-track">
-        <div class="duo-progress-fill" style="width: ${n3ProgressPct}%;"></div>
-      </div>
-      <p class="n3-goal-sub">
-        單字已學 ${vocabReviewedCount}/${VOCAB_LIST.length}（熟悉 ${vocabFamiliarCount}）｜文法已讀 ${grammarReadCount}/${GRAMMAR_LIST.length}｜測驗答對 ${totalCorrect}/${QUIZ_LIST.length} 題
-      </p>
-    </section>
+    <section class="card hero-card">
+      ${renderHeroIllustration()}
 
-    <div class="duo-stats-bar">
-      <div class="duo-stat-pill">
-        <div class="duo-stat-icon gold">${LUCIDE_ICONS.zap}</div>
-        <div>
-          <div class="duo-stat-value">${totalXp} XP</div>
-          <div class="duo-stat-label">累計學習經驗</div>
+      <div class="pill-row">
+        <span class="pill pill-coral">N4 → N3 高效衝刺</span>
+        <span class="pill pill-green">SRS＋主動回想＋語境輸入</span>
+      </div>
+
+      <h3 class="hero-title">日語階梯學習手帳</h3>
+      <p class="page-desc">今日日期 ${today}・依照記憶科學安排每日學習循環</p>
+
+      <div class="stat-tiles" aria-label="學習進度統計">
+        <div class="stat-tile tile-yellow">
+          <div class="stat-tile-value">${stats.n3ProgressPct}%</div>
+          <div class="stat-tile-label">N3 進度</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-value">${stats.dueVocabCount}</div>
+          <div class="stat-tile-label">待複習字</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-value">${stats.unreadGrammarCount}</div>
+          <div class="stat-tile-label">未讀文法</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-tile-value">${stats.unresolvedWrongCount}</div>
+          <div class="stat-tile-label">待修錯題</div>
         </div>
       </div>
 
-      <div class="duo-stat-pill">
-        <div class="duo-stat-icon green">${LUCIDE_ICONS.flame}</div>
-        <div>
-          <div class="duo-stat-value">${totalDue} 個</div>
-          <div class="duo-stat-label">今日待複習單字</div>
+      <div class="progress-row" aria-label="距離 N3 目標進度條">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" style="width: ${stats.n3ProgressPct}%;"></div>
         </div>
-      </div>
-
-      <div class="duo-stat-pill">
-        <div class="duo-stat-icon blue">${LUCIDE_ICONS.target}</div>
-        <div>
-          <div class="duo-stat-value">${unresolvedWrongCount} 題</div>
-          <div class="duo-stat-label">待重練錯題</div>
-        </div>
-      </div>
-    </div>
-
-    <section class="duo-unit-banner">
-      <div>
-        <div class="duo-unit-kicker">單元 1・N4 基礎穩固</div>
-        <h3 class="duo-unit-title">從日常單字與基礎接續開始</h3>
-      </div>
-      <button class="btn" type="button" id="duo-quick-start-btn">${primaryAction.label}</button>
-    </section>
-
-    <div class="duo-path">
-      <div class="duo-node-wrap">
-        ${n4Due > 0 ? `<span class="duo-start-tag">目前焦點</span>` : ""}
-        <button
-          class="duo-node-btn ${n4Due === 0 ? "done" : "current"}"
-          type="button"
-          data-go="vocab"
-          data-level="N4"
-          aria-label="第 1 關：N4 核心單字"
-        >
-          ${n4Due === 0 ? LUCIDE_ICONS.check : LUCIDE_ICONS.star}
-        </button>
-        <div class="duo-node-title">第 1 關：N4 核心單字</div>
-        <div class="duo-node-sub">${n4Due === 0 ? "今日已全數複習" : `待複習 ${n4Due} / ${n4Vocab.length} 個`}</div>
-      </div>
-
-      <div class="duo-node-wrap offset-left">
-        <button
-          class="duo-node-btn ${n4Unread === 0 ? "done" : n4Due === 0 ? "current" : "blue"}"
-          type="button"
-          data-go="grammar"
-          data-level="N4"
-          aria-label="第 2 關：N4 基礎文法"
-        >
-          ${n4Unread === 0 ? LUCIDE_ICONS.check : LUCIDE_ICONS.bookOpen}
-        </button>
-        <div class="duo-node-title">第 2 關：N4 基礎文法</div>
-        <div class="duo-node-sub">${n4Unread === 0 ? "已全部閱讀" : `未讀 ${n4Unread} / ${n4Grammar.length} 篇`}</div>
-      </div>
-
-      <div class="duo-node-wrap offset-right">
-        <button
-          class="duo-node-btn ${totalCorrect >= 5 ? "done" : "blue"}"
-          type="button"
-          data-go="practice"
-          aria-label="第 3 關：單選挑戰測驗"
-        >
-          ${LUCIDE_ICONS.award}
-        </button>
-        <div class="duo-node-title">第 3 關：單選挑戰測驗</div>
-        <div class="duo-node-sub">題庫共 ${QUIZ_LIST.length} 題｜已答對 ${totalCorrect} 題</div>
-      </div>
-    </div>
-
-    <section class="duo-unit-banner blue">
-      <div>
-        <div class="duo-unit-kicker">單元 2・N3 進階階梯</div>
-        <h3 class="duo-unit-title">進階詞彙、語感文法與錯題特訓</h3>
+        <span class="progress-bar-label">距離 N3 ${stats.n3ProgressPct}%</span>
       </div>
     </section>
 
-    <div class="duo-path">
-      <div class="duo-node-wrap offset-left">
-        <button
-          class="duo-node-btn ${n3Due === 0 ? "done" : "blue"}"
-          type="button"
-          data-go="vocab"
-          data-level="N3"
-          aria-label="第 4 關：N3 進階單字"
-        >
-          ${n3Due === 0 ? LUCIDE_ICONS.check : LUCIDE_ICONS.star}
+    <div class="section-heading-row">
+      <div class="section-heading-left">
+        <span class="section-icon-circle coral">${LUCIDE_ICONS.sparkles}</span>
+        <h3 class="section-title">今日重點任務</h3>
+      </div>
+      <span class="section-meta">${priorityTask.tag}</span>
+    </div>
+
+    <section class="card card-blush">
+      <div class="pill-row">
+        <span class="pill pill-yellow">間隔 1 / 3 / 7 天</span>
+        <span class="pill pill-green">主動回想優先</span>
+        <span class="pill pill-blue">i+1 語境輸入</span>
+      </div>
+      <h4 class="card-title" style="margin-top: 12px;">${priorityTask.title}</h4>
+      <p class="page-desc">${priorityTask.desc}</p>
+      <hr class="dashed-divider" />
+      <div class="btn-row" style="margin-top: 0;">
+        <button class="btn btn-primary" type="button" id="priority-go-btn">
+          <span>${priorityTask.btnText}</span>
+          ${LUCIDE_ICONS.arrowRight}
         </button>
-        <div class="duo-node-title">第 4 關：N3 進階單字</div>
-        <div class="duo-node-sub">${n3Due === 0 ? "今日已全數複習" : `待複習 ${n3Due} / ${n3Vocab.length} 個`}</div>
+        <button class="btn" type="button" data-go="practice-wrong" ${stats.wrongTotalCount === 0 ? "disabled" : ""}>
+          錯題重練（${stats.wrongTotalCount}）
+        </button>
+      </div>
+    </section>
+
+    <div class="section-heading-row">
+      <div class="section-heading-left">
+        <span class="section-icon-circle green">${LUCIDE_ICONS.checkCircle}</span>
+        <h3 class="section-title">今日高效檢核</h3>
+      </div>
+      <span class="section-meta">已完成 ${checklistDoneCount} / ${checklistItems.length}</span>
+    </div>
+
+    <section class="card">
+      <div class="checklist">
+        ${checklistItems
+          .map(
+            (item) => `
+          <div class="checklist-item ${item.done ? "is-done" : ""}">
+            <div class="checklist-left">
+              ${item.done ? LUCIDE_ICONS.check : LUCIDE_ICONS.clock}
+              <span>${item.label}</span>
+            </div>
+            <span class="pill ${item.done ? "pill-green" : "pill-yellow"}">
+              ${item.done ? "已完成" : "要注意"}・${item.detail}
+            </span>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    </section>
+
+    <div class="section-heading-row">
+      <div class="section-heading-left">
+        <span class="section-icon-circle blue">${LUCIDE_ICONS.layers}</span>
+        <h3 class="section-title">高效學習時間軸</h3>
+      </div>
+      <span class="section-meta">建議每日 50 分鐘</span>
+    </div>
+
+    <div class="timeline-list">
+      <div class="timeline-row">
+        <div class="timeline-time">10 分</div>
+        <div class="timeline-rail">
+          <span class="timeline-node ${stats.dueVocabCount === 0 ? "done" : ""}"></span>
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-connector">主動回想・SRS 間隔複習</div>
+          <div class="timeline-card">
+            <div class="timeline-card-text">
+              <div class="timeline-card-title">單字語境回想（待複習 ${stats.dueVocabCount} 字）</div>
+              <div class="timeline-card-sub">先不看選項直接回想讀音與意思，依熟練度排 1/3/7 天後複習</div>
+            </div>
+            <button class="btn btn-pill-sm btn-yellow" type="button" data-go="vocab">開始</button>
+          </div>
+        </div>
       </div>
 
-      <div class="duo-node-wrap offset-right">
-        <button
-          class="duo-node-btn ${n3Unread === 0 ? "done" : "blue"}"
-          type="button"
-          data-go="grammar"
-          data-level="N3"
-          aria-label="第 5 關：N3 核心文法"
-        >
-          ${n3Unread === 0 ? LUCIDE_ICONS.check : LUCIDE_ICONS.bookOpen}
-        </button>
-        <div class="duo-node-title">第 5 關：N3 核心文法</div>
-        <div class="duo-node-sub">${n3Unread === 0 ? "已全部閱讀" : `未讀 ${n3Unread} / ${n3Grammar.length} 篇`}</div>
+      <div class="timeline-row">
+        <div class="timeline-time">15 分</div>
+        <div class="timeline-rail">
+          <span class="timeline-node ${stats.unreadGrammarCount === 0 ? "done" : ""}"></span>
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-connector">i+1 理解輸入・主動輸出</div>
+          <div class="timeline-card">
+            <div class="timeline-card-text">
+              <div class="timeline-card-title">文法筆記＋造句輸出（未讀 ${stats.unreadGrammarCount} 篇）</div>
+              <div class="timeline-card-sub">理解接續差異後，親手寫 1 句自己的例句保存或給 AI 批改</div>
+            </div>
+            <button class="btn btn-pill-sm" type="button" data-go="grammar">閱讀</button>
+          </div>
+        </div>
       </div>
 
-      <div class="duo-node-wrap">
-        <button
-          class="duo-node-btn ${unresolvedWrongCount > 0 ? "danger" : wrongEntries.length > 0 ? "done" : ""}"
-          type="button"
-          data-go="practice-wrong"
-          aria-label="第 6 關：錯題特訓關卡"
-        >
-          ${LUCIDE_ICONS.target}
-        </button>
-        <div class="duo-node-title">第 6 關：錯題特訓關卡</div>
-        <div class="duo-node-sub">
-          ${wrongEntries.length === 0 ? "目前無錯題紀錄" : `錯題本 ${wrongEntries.length} 題（待重練 ${unresolvedWrongCount} 題）`}
+      <div class="timeline-row">
+        <div class="timeline-time">15 分</div>
+        <div class="timeline-rail">
+          <span class="timeline-node ${stats.todayQuizDoneCount > 0 ? "done" : ""}"></span>
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-connector">Cloze 語境克漏字測驗</div>
+          <div class="timeline-card">
+            <div class="timeline-card-text">
+              <div class="timeline-card-title">每日 10 題／AI 新題（已答對 ${stats.totalCorrect} 題）</div>
+              <div class="timeline-card-sub">在完整日文句子中判斷助詞、動詞搭配與語氣</div>
+            </div>
+            <button class="btn btn-pill-sm" type="button" data-go="practice">測驗</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline-row">
+        <div class="timeline-time">10 分</div>
+        <div class="timeline-rail">
+          <span class="timeline-node ${stats.unresolvedWrongCount === 0 ? "done" : ""}"></span>
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-connector">錯題檢索強化</div>
+          <div class="timeline-card">
+            <div class="timeline-card-text">
+              <div class="timeline-card-title">錯題本專攻（待重練 ${stats.unresolvedWrongCount} 題）</div>
+              <div class="timeline-card-sub">重複修正易混淆選項，答對後仍保留歷史紀錄</div>
+            </div>
+            <button class="btn btn-pill-sm" type="button" data-go="practice-wrong" ${stats.wrongTotalCount === 0 ? "disabled" : ""}>重練</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <section class="notice-box notice-info">
+    <section class="notice-box notice-info" style="margin-top: 24px;">
       ${LUCIDE_ICONS.info}
       <div class="notice-content">
-        <strong>學習與資料提醒</strong><br />
+        <strong>教材與儲存說明</strong><br />
         1. ${STUDY_CONFIG.disclaimer.contentNotice}<br />
         2. ${STUDY_CONFIG.disclaimer.storageNotice}
       </div>
     </section>
   `;
 
-  container.querySelector("#duo-quick-start-btn")?.addEventListener("click", () => {
-    navigate(primaryAction.route, primaryAction.params);
+  container.querySelector("#priority-go-btn")?.addEventListener("click", () => {
+    navigate(priorityTask.route, priorityTask.params);
   });
 
   container.querySelectorAll("[data-go]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const target = btn.getAttribute("data-go");
-      const level = btn.getAttribute("data-level");
       if (target === "practice-wrong") {
         navigate("practice", { wrongOnly: true });
-      } else if (level) {
-        navigate(target, { levelFilter: level });
       } else {
         navigate(target);
       }

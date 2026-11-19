@@ -27,7 +27,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
     shuffleQuestions: false,
     sessionIds: null,
     index: 0,
-    combo: 0,
+    streak: 0,
     selectedOptionId: null,
     submitted: false,
     lastResult: null,
@@ -132,7 +132,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
       <div class="page-header">
         <h2 class="page-title">練習與錯題本</h2>
         <p class="page-desc">
-          今日日期：${today}｜可切換「今日每日 10 題」、「AI 每日新題（10 題）」、全部 ${QUIZ_LIST.length} 題、錯題本或標記待複習題目。
+          今日日期：${today}｜透過 Cloze 語境填空測驗搭配錯題檢索重練。支援「今日每日 10 題」、「AI 每日新題」、全部 ${QUIZ_LIST.length} 題與「標記待複習」。
         </p>
       </div>
 
@@ -165,7 +165,10 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
           <span class="filter-label">隨機抽題順序</span>
         </label>
 
-        <button class="btn" type="button" id="reshuffle-session-btn">重新洗牌</button>
+        <button class="btn btn-pill-sm" type="button" id="reshuffle-session-btn">
+          ${LUCIDE_ICONS.rotateCcw}
+          <span>重新洗牌</span>
+        </button>
       </div>
 
       ${ui.mode === "ai" ? renderAiPanel(apiKey, cachedAi) : ""}
@@ -192,8 +195,15 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
 
       ${renderSentenceCheckerCard(apiKey)}
 
+      <div class="section-heading-row">
+        <div class="section-heading-left">
+          <span class="section-icon-circle coral">${LUCIDE_ICONS.bookmark}</span>
+          <h3 class="section-title">錯題本紀錄</h3>
+        </div>
+        <span class="section-meta">共 ${wrongEntries.length} 題（每題唯一卡片）</span>
+      </div>
+
       <section class="card">
-        <h3 class="section-heading">錯題本紀錄（共 ${wrongEntries.length} 題）</h3>
         ${
           wrongEntries.length === 0
             ? `<p class="page-desc">目前沒有任何錯題紀錄。</p>`
@@ -208,9 +218,9 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
   function renderAiPanel(apiKey, cachedAi) {
     if (!apiKey) {
       return `
-        <section class="card">
+        <section class="card card-blush">
           <h3 class="card-title">尚未設定 Gemini API Key</h3>
-          <p class="page-desc">請先到「學習紀錄與設定」填入您自己的 Gemini API Key（僅存在目前瀏覽器，不會外流），即可啟用 AI 每日全新出題。</p>
+          <p class="page-desc">請先到「紀錄」頁填入您自己的 Gemini API Key（僅存在目前瀏覽器，不會外流），即可啟用 AI 每日全新出題。</p>
           <div class="btn-row">
             <button class="btn btn-primary" type="button" id="go-records-for-key">前往設定 API Key</button>
           </div>
@@ -219,10 +229,10 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
     }
 
     return `
-      <section class="card" style="margin-bottom: 16px;">
-        <div class="badge-row">
-          <span class="badge badge-primary">Gemini AI 模式</span>
-          <span class="badge">${cachedAi.length > 0 ? `今日已緩存 ${cachedAi.length} 題` : "今日尚未生成"}</span>
+      <section class="card card-blush" style="margin-bottom: 16px;">
+        <div class="pill-row">
+          <span class="pill pill-blue">Gemini AI 模式</span>
+          <span class="pill">${cachedAi.length > 0 ? `今日已緩存 ${cachedAi.length} 題` : "今日尚未生成"}</span>
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" type="button" id="generate-ai-quizzes-btn" ${ui.aiLoading ? "disabled" : ""}>
@@ -251,48 +261,45 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
 
     return `
       <section class="card">
-        <div class="duo-progress-row" aria-label="練習進度">
-          <div class="duo-progress-track">
-            <div class="duo-progress-fill" style="width: ${progressPct}%;"></div>
+        <div class="progress-row" style="margin-top: 0; margin-bottom: 12px;" aria-label="練習進度">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width: ${progressPct}%;"></div>
           </div>
-          <span class="duo-progress-text">第 ${ui.index + 1} / ${total} 題</span>
+          <span class="progress-bar-label">第 ${ui.index + 1} / ${total} 題</span>
           ${
-            ui.combo >= 2
-              ? `<span class="badge badge-warning">連對 ${ui.combo} 題</span>`
+            ui.streak >= 2
+              ? `<span class="pill pill-green">連對 ${ui.streak} 題</span>`
               : ""
           }
         </div>
 
-        <div class="badge-row" style="margin-bottom: 12px;">
-          <span class="badge badge-primary">${escapeHtml(question.levelCategory)} 分類</span>
+        <div class="badge-row">
+          <span class="badge pill-blue">${escapeHtml(question.levelCategory)} 分類</span>
           <span class="badge">${escapeHtml(question.reviewStatus)}</span>
-          ${isMarked ? `<span class="badge badge-warning">★ 已標記待複習</span>` : ""}
+          ${isMarked ? `<span class="badge pill-yellow">已標記待複習</span>` : ""}
           <span class="badge">題號：${escapeHtml(question.id)}</span>
         </div>
 
-        <div class="duo-mascot-row">
-          <div class="duo-mascot-avatar" aria-hidden="true">${LUCIDE_ICONS.owl}</div>
-          <div class="duo-speech-bubble">
-            <div class="quiz-prompt" lang="ja">${renderRubyText(question.prompt)}</div>
-            <div class="btn-row" style="margin-top: 10px;">
-              <button
-                class="btn"
-                type="button"
-                data-speak-ja="${escapeHtml(plainPrompt)}"
-                ${speechAvailable ? "" : "disabled"}
-              >
-                ${LUCIDE_ICONS.volume2}
-                <span>朗讀題目</span>
-              </button>
-              <button
-                class="btn ${isMarked ? "btn-warning" : ""}"
-                type="button"
-                id="quiz-mark-review-btn"
-              >
-                ${LUCIDE_ICONS.star}
-                <span>${isMarked ? "已標記待複習（點擊取消）" : "標記此題待複習"}</span>
-              </button>
-            </div>
+        <div class="quiz-prompt-box">
+          <div class="quiz-prompt" lang="ja">${renderRubyText(question.prompt)}</div>
+          <div class="btn-row">
+            <button
+              class="btn btn-pill-sm"
+              type="button"
+              data-speak-ja="${escapeHtml(plainPrompt)}"
+              ${speechAvailable ? "" : "disabled"}
+            >
+              ${LUCIDE_ICONS.volume2}
+              <span>朗讀題目</span>
+            </button>
+            <button
+              class="btn btn-pill-sm ${isMarked ? "btn-warning" : ""}"
+              type="button"
+              id="quiz-mark-review-btn"
+            >
+              ${LUCIDE_ICONS.bookmark}
+              <span>${isMarked ? "已標記待複習（點擊取消）" : "標記此題待複習"}</span>
+            </button>
           </div>
         </div>
 
@@ -327,7 +334,8 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
             ${ui.submitted ? "已提交（不可重複計分）" : "檢查答案"}
           </button>
           <button class="btn btn-blue" type="button" id="next-quiz-btn" ${total <= 1 ? "disabled" : ""}>
-            繼續下一題
+            <span>繼續下一題</span>
+            ${LUCIDE_ICONS.arrowRight}
           </button>
         </div>
 
@@ -337,16 +345,17 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
           <div class="notice-box ${ui.lastResult.isCorrect ? "notice-success" : "notice-danger"}" style="margin-top: 16px;">
             ${ui.lastResult.isCorrect ? LUCIDE_ICONS.check : LUCIDE_ICONS.x}
             <div class="notice-content">
-              <strong>${ui.lastResult.isCorrect ? "太棒了！答對了！（+10 XP）" : "再接再厲，答錯了"}</strong><br />
+              <strong>${ui.lastResult.isCorrect ? "答對了！語境判斷正確" : "答錯了，已存入錯題本"}</strong><br />
               <span>正確答案：<strong lang="ja">${renderRubyText(ui.lastResult.correctOption?.text || "")}</strong></span><br />
               <span>解析：${escapeHtml(question.explanation)}</span>
 
               ${
                 apiKey
                   ? `
-                <div class="btn-row" style="margin-top: 10px;">
-                  <button class="btn" type="button" id="ai-explain-btn" ${ui.aiExplainLoading ? "disabled" : ""}>
-                    ${ui.aiExplainLoading ? "AI 老師撰寫解析中…" : "請 AI 老師詳細解析"}
+                <div class="btn-row">
+                  <button class="btn btn-pill-sm" type="button" id="ai-explain-btn" ${ui.aiExplainLoading ? "disabled" : ""}>
+                    ${LUCIDE_ICONS.sparkles}
+                    <span>${ui.aiExplainLoading ? "AI 老師撰寫解析中…" : "請 AI 老師詳細解析"}</span>
                   </button>
                 </div>
               `
@@ -361,7 +370,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
           }
           ${
             ui.aiExplainText
-              ? `<div class="notice-box notice-info" style="margin-top: 10px;">${LUCIDE_ICONS.owl}<div class="notice-content" style="white-space: pre-line;"><strong>AI 老師詳細說明：</strong>\n${escapeHtml(ui.aiExplainText)}</div></div>`
+              ? `<div class="notice-box notice-info" style="margin-top: 10px;">${LUCIDE_ICONS.sparkles}<div class="notice-content" style="white-space: pre-line;"><strong>AI 老師詳細說明：</strong>\n${escapeHtml(ui.aiExplainText)}</div></div>`
               : ""
           }
         `
@@ -376,8 +385,8 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
       return "";
     }
     return `
-      <section class="card">
-        <h3 class="section-heading">AI 日文造句批改</h3>
+      <section class="card" style="margin-top: 16px;">
+        <h3 class="section-heading">AI 日文造句批改（主動輸出）</h3>
         <p class="page-desc">試著用剛學到的 N4／N3 單字或文法造一句日文，讓 Gemini AI 幫您檢查語法與自然度。</p>
         <textarea
           id="ai-sentence-input"
@@ -386,7 +395,8 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
         >${escapeHtml(ui.sentenceInput)}</textarea>
         <div class="btn-row">
           <button class="btn btn-blue" type="button" id="ai-check-sentence-btn" ${ui.sentenceLoading ? "disabled" : ""}>
-            ${ui.sentenceLoading ? "AI 批改中…" : "送出 AI 批改"}
+            ${LUCIDE_ICONS.sparkles}
+            <span>${ui.sentenceLoading ? "AI 批改中…" : "送出 AI 批改"}</span>
           </button>
         </div>
         ${
@@ -396,7 +406,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
         }
         ${
           ui.sentenceFeedback
-            ? `<div class="notice-box notice-info" style="margin-top: 12px;">${LUCIDE_ICONS.owl}<div class="notice-content" style="white-space: pre-line;">${escapeHtml(ui.sentenceFeedback)}</div></div>`
+            ? `<div class="notice-box notice-info" style="margin-top: 12px;">${LUCIDE_ICONS.sparkles}<div class="notice-content" style="white-space: pre-line;">${escapeHtml(ui.sentenceFeedback)}</div></div>`
             : ""
         }
       </section>
@@ -412,19 +422,19 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
             const statusHtml = entry.lastIsCorrect
               ? `${LUCIDE_ICONS.check}<span>最近已重新答對（保留歷史紀錄）</span>`
               : `${LUCIDE_ICONS.x}<span>最近仍答錯（建議重練）</span>`;
-            const statusClass = entry.lastIsCorrect ? "badge-success" : "badge-danger";
+            const statusClass = entry.lastIsCorrect ? "pill-green" : "pill-coral";
             const timeText = entry.lastAnsweredAt
               ? new Date(entry.lastAnsweredAt).toLocaleString("zh-TW", { hour12: false })
               : "未知";
 
             return `
-              <div class="example-box">
+              <div class="example-box ${entry.lastIsCorrect ? "highlight-row-green" : ""}">
                 <div class="badge-row">
                   <span class="badge">${escapeHtml(entry.questionId)}</span>
                   <span class="badge ${statusClass}">${statusHtml}</span>
-                  <span class="badge badge-warning">累計答錯 ${entry.wrongCount} 次</span>
+                  <span class="badge pill-yellow">累計答錯 ${entry.wrongCount} 次</span>
                 </div>
-                <div lang="ja" style="margin-top: 8px; font-weight: 500;">${renderRubyText(q?.prompt || "（歷史 AI 題目）")}</div>
+                <div lang="ja" style="margin-top: 8px; font-weight: 600;">${renderRubyText(q?.prompt || "（歷史 AI 題目）")}</div>
                 <div class="flashcard-meta">
                   最近錯選：<span lang="ja">${renderRubyText(entry.lastWrongOptionText)}</span>｜最近作答：${escapeHtml(timeText)}
                 </div>
@@ -544,7 +554,7 @@ export function renderPracticePage(container, { state, updateState, navigate, pa
         state = updateState(outcome.state);
         ui.submitted = true;
         ui.lastResult = outcome.result;
-        ui.combo = outcome.result?.isCorrect ? ui.combo + 1 : 0;
+        ui.streak = outcome.result?.isCorrect ? ui.streak + 1 : 0;
         render();
       }
     });

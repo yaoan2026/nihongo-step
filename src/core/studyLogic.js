@@ -202,3 +202,80 @@ export function recordQuizSubmission({
     duplicateBlocked: false
   };
 }
+
+export function getJapanTimeString(date = new Date()) {
+  try {
+    return new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(date);
+  } catch {
+    const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
+    const jst = new Date(utcMs + 9 * 3600000);
+    const hh = String(jst.getHours()).padStart(2, "0");
+    const mm = String(jst.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+}
+
+export function setGrammarNote(grammarNotes, grammarId, noteText) {
+  return {
+    ...(grammarNotes || {}),
+    [grammarId]: String(noteText || "")
+  };
+}
+
+export function computeStudyReadiness({
+  state,
+  vocabList,
+  grammarList,
+  quizList,
+  todayStr
+}) {
+  const vocabProgress = state.vocabProgress || {};
+  const grammarProgress = state.grammarProgress || {};
+  const wrongEntries = Object.values(state.wrongBook || {});
+  const quizHistory = Array.isArray(state.quizHistory) ? state.quizHistory : [];
+
+  const dueVocabCount = vocabList.filter((v) => isVocabDue(vocabProgress[v.id], todayStr)).length;
+  const reviewedVocabCount = vocabList.filter((v) => Boolean(vocabProgress[v.id])).length;
+  const familiarVocabCount = vocabList.filter((v) => vocabProgress[v.id]?.familiarity === "familiar").length;
+  const todayVocabDoneCount = vocabList.filter((v) => vocabProgress[v.id]?.lastReviewedAt === todayStr).length;
+
+  const readGrammarCount = grammarList.filter((g) => Boolean(grammarProgress[g.id]?.isRead)).length;
+  const unreadGrammarCount = grammarList.length - readGrammarCount;
+
+  const totalCorrect = state.quizStats?.totalCorrect || 0;
+  const wrongTotalCount = wrongEntries.length;
+  const unresolvedWrongCount = wrongEntries.filter((w) => !w.lastIsCorrect).length;
+  const markedVocabCount = Object.keys(state.reviewMarks?.vocab || {}).length;
+  const markedQuizCount = Object.keys(state.reviewMarks?.quiz || {}).length;
+  const todayQuizDoneCount = quizHistory.filter((h) => {
+    if (typeof h?.answeredAt !== "string") return false;
+    const dt = new Date(h.answeredAt);
+    return !Number.isNaN(dt.getTime()) && getLocalDateString(dt) === todayStr;
+  }).length;
+
+  const vocabRatio = vocabList.length > 0 ? Math.min(1, reviewedVocabCount / vocabList.length) : 0;
+  const grammarRatio = grammarList.length > 0 ? Math.min(1, readGrammarCount / grammarList.length) : 0;
+  const quizRatio = quizList.length > 0 ? Math.min(1, totalCorrect / quizList.length) : 0;
+  const n3ProgressPct = Math.round((vocabRatio * 0.4 + grammarRatio * 0.3 + quizRatio * 0.3) * 100);
+
+  return {
+    n3ProgressPct,
+    dueVocabCount,
+    reviewedVocabCount,
+    familiarVocabCount,
+    readGrammarCount,
+    unreadGrammarCount,
+    totalCorrect,
+    unresolvedWrongCount,
+    wrongTotalCount,
+    markedVocabCount,
+    markedQuizCount,
+    todayVocabDoneCount,
+    todayQuizDoneCount
+  };
+}

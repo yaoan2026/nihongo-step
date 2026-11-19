@@ -15,7 +15,10 @@ import {
   setGrammarMastery,
   prepareQuizQuestion,
   gradeQuizAnswer,
-  recordQuizSubmission
+  recordQuizSubmission,
+  getJapanTimeString,
+  setGrammarNote,
+  computeStudyReadiness
 } from "../src/core/studyLogic.js";
 import {
   renderRubyText,
@@ -250,4 +253,66 @@ test("AI 回傳題目驗證與正規化正確", () => {
   assert.equal(validated[0].id, "ai_2026-11-17_01");
   assert.equal(validated[0].correctOptionId, "opt_a");
   assert.throws(() => validateAiQuizList([], "2026-11-17"));
+});
+
+test("N3 學習準備度計算與日本時間格式化正確", () => {
+  const jst = getJapanTimeString(new Date("2026-11-19T00:30:00Z"));
+  assert.equal(jst, "09:30");
+
+  let state = createDefaultState();
+  state.vocabProgress = rateVocabCard(state.vocabProgress, "vocab_n4_001", "familiar", STUDY_CONFIG, "2026-11-19");
+  state.grammarProgress = toggleGrammarRead(state.grammarProgress, "gram_n4_001", "2026-11-19T01:00:00Z");
+  state.quizStats = { totalAnswered: 10, totalCorrect: 8 };
+  state.quizHistory = [
+    {
+      questionId: "quiz_001",
+      isCorrect: true,
+      selectedOptionText: "決めます",
+      answeredAt: "2026-11-19T01:05:00.000Z"
+    }
+  ];
+
+  const readiness = computeStudyReadiness({
+    state,
+    vocabList: VOCAB_LIST,
+    grammarList: GRAMMAR_LIST,
+    quizList: QUIZ_LIST,
+    todayStr: "2026-11-19"
+  });
+
+  assert.equal(readiness.dueVocabCount, 19);
+  assert.equal(readiness.reviewedVocabCount, 1);
+  assert.equal(readiness.familiarVocabCount, 1);
+  assert.equal(readiness.readGrammarCount, 1);
+  assert.equal(readiness.unreadGrammarCount, 4);
+  assert.equal(readiness.todayVocabDoneCount, 1);
+  assert.equal(readiness.todayQuizDoneCount, 1);
+  assert.equal(readiness.n3ProgressPct, 14);
+});
+
+test("文法造句筆記設定與舊版備份相容匯入", () => {
+  let notes = {};
+  notes = setGrammarNote(notes, "gram_n4_001", "自分で作ってみました。");
+  assert.equal(notes["gram_n4_001"], "自分で作ってみました。");
+
+  const stateWithNotes = {
+    ...createDefaultState(),
+    grammarNotes: notes
+  };
+  const exported = exportStateJson(stateWithNotes, "2026-11-19T01:00:00Z");
+  const parsedCheck = validateImportPayload(exported);
+  assert.equal(parsedCheck.ok, true);
+  assert.equal(parsedCheck.data.grammarNotes["gram_n4_001"], "自分で作ってみました。");
+
+  // 模擬不含 grammarNotes 的舊版 v1 備份
+  const legacyPayload = JSON.stringify({
+    schemaVersion: 1,
+    vocabProgress: {},
+    grammarProgress: {},
+    quizStats: { totalAnswered: 2, totalCorrect: 2 },
+    wrongBook: {}
+  });
+  const legacyCheck = validateImportPayload(legacyPayload);
+  assert.equal(legacyCheck.ok, true);
+  assert.deepEqual(legacyCheck.data.grammarNotes, {});
 });

@@ -13,7 +13,7 @@ export const VOCAB_LIST = [
     kana: "きめる",
     meaning: "決定",
     pos: "他動詞（一段）",
-    exampleJa: "来月の旅行の日程を決めます。",
+    exampleJa: "{来月|らいげつ}の{旅行|りょこう}の{日程|にってい}を{決|き}めます。",
     exampleZh: "決定下個月旅行的日程。",
     ...META
   },
@@ -25,7 +25,7 @@ export const VOCAB_LIST = [
     kana: "とどける",
     meaning: "送達、遞交",
     pos: "他動詞（一段）",
-    exampleJa: "駅まで荷物を届けました。",
+    exampleJa: "{駅|えき}まで{荷物|にもつ}を{届|とど}けました。",
     exampleZh: "把行李送到車站了。",
     ...META
   },
@@ -37,7 +37,7 @@ export const VOCAB_LIST = [
     kana: "まにあう",
     meaning: "趕上、來得及",
     pos: "自動詞（五段）",
-    exampleJa: "急いで走ったので、電車に間に合いました。",
+    exampleJa: "{急|いそ}いで{走|はし}ったので、{電車|でんしゃ}に{間|ま}に{合|あ}いました。",
     exampleZh: "因為趕緊跑了起來，所以趕上了電車。",
     ...META
   },
@@ -49,7 +49,7 @@ export const VOCAB_LIST = [
     kana: "しらべる",
     meaning: "調查、查詢",
     pos: "他動詞（一段）",
-    exampleJa: "分からない言葉を辞書で調べます。",
+    exampleJa: "{分|わ}からない{言葉|ことば}を{辞書|じしょ}で{調|しら}べます。",
     exampleZh: "用字典查詢不懂的詞彙。",
     ...META
   },
@@ -61,7 +61,7 @@ export const VOCAB_LIST = [
     kana: "じゅんび",
     meaning: "準備",
     pos: "名詞・する動詞",
-    exampleJa: "明日の会議の準備が終わりました。",
+    exampleJa: "{明日|あした}の{会議|かいぎ}の{準備|じゅんび}が{終|お}わりました。",
     exampleZh: "明天會議的準備已經完成了。",
     ...META
   },
@@ -73,7 +73,7 @@ export const VOCAB_LIST = [
     kana: "あんしん",
     meaning: "放心、安心",
     pos: "名詞・する動詞",
-    exampleJa: "母の声を聞いて安心しました。",
+    exampleJa: "{母|はは}の{声|こえ}を{聞|き}いて{安心|あんしん}しました。",
     exampleZh: "聽到母親的聲音後放心了。",
     ...META
   },
@@ -85,7 +85,7 @@ export const VOCAB_LIST = [
     kana: "ていねい",
     meaning: "禮貌、仔細",
     pos: "な形容詞",
-    exampleJa: "先生はいつも丁寧に説明してくれます。",
+    exampleJa: "{先生|せんせい}はいつも{丁寧|ていねい}に{説明|せつめい}してくれます。",
     exampleZh: "老師總是仔細地為我們說明。",
     ...META
   },
@@ -97,7 +97,7 @@ export const VOCAB_LIST = [
     kana: "かたづける",
     meaning: "整理、收拾",
     pos: "他動詞（一段）",
-    exampleJa: "食事の後で机の上を片付けます。",
+    exampleJa: "{食事|しょくじ}の{後|あと}で{机|つくえ}の{上|うえ}を{片付|かたづ}けます。",
     exampleZh: "吃飯後把桌面收拾乾淨。",
     ...META
   },
@@ -109,7 +109,7 @@ export const VOCAB_LIST = [
     kana: "のりかえる",
     meaning: "轉乘、換車",
     pos: "他動詞（一段）",
-    exampleJa: "次の駅で地下鉄に乗り換えてください。",
+    exampleJa: "{次|つぎ}の{駅|えき}で{地下鉄|ちかてつ}に{乗|の}り{換|か}えてください。",
     exampleZh: "請在下一站轉乘地下鐵。",
     ...META
   },
@@ -121,7 +121,7 @@ export const VOCAB_LIST = [
     kana: "よてい",
     meaning: "預定、計畫",
     pos: "名詞・する動詞",
-    exampleJa: "週末は友達と映画を見る予定です。",
+    exampleJa: "{週末|しゅうまつ}は{友達|ともだち}と{映画|えいが}を{見|み}る{予定|よてい}です。",
     exampleZh: "週末預定和朋友看電影。",
     ...META
   },
@@ -133,7 +133,7 @@ export const VOCAB_LIST = [
     kana: "かくにん",
     meaning: "確認",
     pos: "名詞・する動詞",
-    exampleJa: "出発する前に時間を確認しましょう。",
+    exampleJa: "{出発|しゅっぱつ}する{前|まえ}に{時間|じかん}を{確認|かくにん}しましょう。",
     exampleZh: "出發前先確認一下時間吧。",
     ...META
   },
@@ -145,7 +145,7 @@ export const VOCAB_LIST = [
     kana: "そうだん",
     meaning: "商量、諮詢",
     pos: "名詞・する動詞",
-    exampleJa: "進路について先生に相談しました。",
+    exampleJa: "{進路|しんろ}について{先生|せんせい}に{相談|そうだん}しました。",
     exampleZh: "關於未來出路向老師請教商量了。",
     ...META
   },
@@ -157,7 +157,7 @@ export const VOCAB_LIST = [
     kana: "ふえる",
     meaning: "增加（自動）",
     pos: "自動詞（一段）",
-    exampleJa: "最近、日本語を勉強する人が増えています。",
+    exampleJa: "{最近|さいきん}、{日本語|にほんご}を{勉強|べんきょう}する{人|ひと}が{増|ふ}えています。",
     exampleZh: "最近學日文的人正在增加。",
     ...META
   },
@@ -169,7 +169,7 @@ export const VOCAB_LIST = [
     kana: "きんちょう",
     meaning: "緊張",
     pos: "名詞・する動詞",
-    exampleJa: "スピーチの前はとても緊張しました。",
+    exampleJa: "スピーチの{前|まえ}はとても{緊張|きんちょう}しました。",
     exampleZh: "演講前非常緊張。",
     ...META
   },
@@ -181,7 +181,7 @@ export const VOCAB_LIST = [
     kana: "まとめる",
     meaning: "彙整、總結",
     pos: "他動詞（一段）",
-    exampleJa: "アンケートの結果をレポートにまとめました。",
+    exampleJa: "アンケートの{結果|けっか}をレポートにまとめました。",
     exampleZh: "把問卷結果彙整成報告了。",
     ...META
   },
@@ -193,7 +193,7 @@ export const VOCAB_LIST = [
     kana: "ことわる",
     meaning: "拒絕、謝絕",
     pos: "他動詞（五段）",
-    exampleJa: "用事があったので、友達の誘いを断りました。",
+    exampleJa: "{用事|ようじ}があったので、{友達|ともだち}の{誘|さそ}いを{断|ことわ}りました。",
     exampleZh: "因為有事，所以婉拒了朋友的邀請。",
     ...META
   },
@@ -205,7 +205,7 @@ export const VOCAB_LIST = [
     kana: "こんざつ",
     meaning: "擁擠、混雜",
     pos: "名詞・する動詞",
-    exampleJa: "朝の駅は通勤客で混雑しています。",
+    exampleJa: "{朝|あさ}の{駅|えき}は{通勤客|つうきんきゃく}で{混雑|こんざつ}しています。",
     exampleZh: "早上的車站因為通勤族而很擁擠。",
     ...META
   },
@@ -217,7 +217,7 @@ export const VOCAB_LIST = [
     kana: "しぜん",
     meaning: "自然、不勉強",
     pos: "名詞・な形容詞",
-    exampleJa: "山に囲まれた場所で、自然が豊かです。",
+    exampleJa: "{山|やま}に{囲|かこ}まれた{場所|ばしょ}で、{自然|しぜん}が{豊|ゆた}かです。",
     exampleZh: "被群山環繞的地方，自然環境豐富。",
     ...META
   },
@@ -229,7 +229,7 @@ export const VOCAB_LIST = [
     kana: "くらべる",
     meaning: "比較",
     pos: "他動詞（一段）",
-    exampleJa: "去年と比べると、今年はとても涼しいです。",
+    exampleJa: "{去年|きょねん}と{比|くら}べると、{今年|ことし}はとても{涼|すず}しいです。",
     exampleZh: "和去年相比，今年非常涼爽。",
     ...META
   },
@@ -241,7 +241,7 @@ export const VOCAB_LIST = [
     kana: "もくひょう",
     meaning: "目標",
     pos: "名詞",
-    exampleJa: "今年の目標はJLPTの試験に合格することです。",
+    exampleJa: "{今年|ことし}の{目標|もくひょう}はJLPTの{試験|しけん}に{合格|ごうかく}することです。",
     exampleZh: "今年的目標是通過日語檢定考試。",
     ...META
   }
